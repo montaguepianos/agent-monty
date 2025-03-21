@@ -1,8 +1,8 @@
-flask==3.0.2
+flask==2.2.5
 functions-framework==3.4.0
 python-dotenv==1.0.1
 openai==1.12.0
 requests==2.31.0
 numpy==1.26.4
-agents==0.1.0
+agents==1.4.0
 flask-cors==4.0.0
