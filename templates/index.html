@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monty - Montague Pianos Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <img src="{{ url_for('static', filename='images/monty-logo.png') }}" alt="Monty Logo" class="logo-img" onerror="this.style.display='none'">
+                <h1>Monty</h1>
+            </div>
+            <div class="controls">
+                <button id="clearChat" class="btn-secondary">
+                    <i class="fas fa-trash"></i> Clear Chat
+                </button>
+                <button id="toggleVoice" class="btn-secondary">
+                    <i class="fas fa-microphone"></i> Toggle Voice
+                </button>
+            </div>
+        </header>
+
+        <main class="chat-container">
+            <div id="chatMessages" class="chat-messages">
+                <div class="message system">
+                    <div class="message-content">
+                        Hello! I'm Monty, your friendly assistant at Montague Pianos. How can I help you today?
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <textarea id="userInput" placeholder="Type your message here..." rows="1"></textarea>
+                <button id="sendMessage" class="btn-primary">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html> 
