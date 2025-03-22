@@ -21,10 +21,17 @@
             <div id="chatContainer" class="chat-messages">
                 <div class="message monty">
                     <div class="message-text">
-                        Hello! I'm Monty, your friendly assistant at Montague Pianos. How can I help you today?
+                        <span class="monty-name">Monty</span> Hello! I'm Monty, your friendly assistant at Montague Pianos. How can I help you today?
                     </div>
                 </div>
+                <div class="typing-indicator" id="typingIndicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
             </div>
+
+            <div class="error-message" id="errorMessage"></div>
 
             <div class="input-container">
                 <textarea id="userInput" placeholder="Type your message here..."></textarea>
