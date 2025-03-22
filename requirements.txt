@@ -1,8 +1,6 @@
-flask==2.2.5
-functions-framework==3.4.0
+flask==3.0.2
 python-dotenv==1.0.1
-openai==1.12.0
-requests==2.31.0
+openai>=1.66.5
 numpy==1.26.4
-agents==1.4.0
-flask-cors==4.0.0
+sounddevice==0.4.6
+openai-agents==0.0.6

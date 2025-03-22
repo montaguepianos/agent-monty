@@ -15,30 +15,20 @@
                 <img src="{{ url_for('static', filename='images/monty-logo.png') }}" alt="Monty Logo" class="logo-img" onerror="this.style.display='none'">
                 <h1>Monty</h1>
             </div>
-            <div class="controls">
-                <button id="clearChat" class="btn-secondary">
-                    <i class="fas fa-trash"></i> Clear Chat
-                </button>
-                <button id="toggleVoice" class="btn-secondary">
-                    <i class="fas fa-microphone"></i> Toggle Voice
-                </button>
-            </div>
         </header>
 
         <main class="chat-container">
-            <div id="chatMessages" class="chat-messages">
-                <div class="message system">
-                    <div class="message-content">
+            <div id="chatContainer" class="chat-messages">
+                <div class="message monty">
+                    <div class="message-text">
                         Hello! I'm Monty, your friendly assistant at Montague Pianos. How can I help you today?
                     </div>
                 </div>
             </div>
 
             <div class="input-container">
-                <textarea id="userInput" placeholder="Type your message here..." rows="1"></textarea>
-                <button id="sendMessage" class="btn-primary">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
+                <textarea id="userInput" placeholder="Type your message here..."></textarea>
+                <button id="sendButton">Send</button>
             </div>
         </main>
     </div>

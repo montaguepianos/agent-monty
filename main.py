@@ -4,17 +4,10 @@ from flask import Flask, request, Response, render_template, jsonify
 from openai import OpenAI
 import asyncio
 import numpy as np
-import sounddevice as sd
 from agents import Agent, Runner, function_tool, ModelSettings
 from agents.tool import WebSearchTool, FileSearchTool, FunctionTool, ComputerTool
-from agents.voice import (
-    AudioInput,
-    SingleAgentVoiceWorkflow,
-    VoicePipeline,
-)
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 import json
-import wave
 import io
 
 # Load environment variables
@@ -104,12 +97,7 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
     Refunds and Exchange Policy
     - I'm not in a position to discuss refunds or or exchanges, but if you call Lee on 01442 8 7 6 1 3 1 he will be delighted to have that conversation with you. """
 
-    # TOOLS
-web_search_tool = WebSearchTool(
-    user_location=None,
-    search_context_size="medium"
-)
-
+# TOOLS
 file_search_tool = FileSearchTool(
     max_num_results=50,
     vector_store_ids=["vs_67d41bb39fe481919fa52375ee097820"],
@@ -140,16 +128,12 @@ agent_monty = Agent(
     name="Monty Agent",
     handoff_description="Primary customer service representative for Montague Pianos",
     instructions=prompt_with_handoff_instructions(MONTY_INSTRUCTIONS),
-    model="gpt-4o",
-    tools=[web_search_tool],
+    model="gpt-4o"
 )
 
 # Set up handoffs
 triage_agent.handoffs = [agent_monty]
 agent_monty.handoffs = [triage_agent]
-
-# Voice pipeline setup
-voice_pipeline = VoicePipeline(workflow=SingleAgentVoiceWorkflow(agent_monty))
 
 @app.route('/')
 def index():
@@ -215,9 +199,9 @@ def ask():
         try:
             speech_response = client.audio.speech.create(
                 model="gpt-4o-mini-tts",
-                voice="alloy",
+                voice="echo",
                 input=result.final_output,
-                instructions="""Voice: Cheerful, slightly robotic, and full of warmth — Monty sounds like he loves helping, with a bright, enthusiastic tone that's friendly, fun, and just a little synthetic in a charming way.
+                instructions="""Voice: Cheery, enthusiastic, and slightly robotic — Monty sounds like a friendly robot who loves helping customers, with a bright, upbeat tone that's both professional and endearing.
 
 Punctuation: Crisp and well-paced, with light, natural pauses that create clarity and rhythm, adding a sense of attentiveness and delight in every interaction.
 
@@ -225,7 +209,7 @@ Delivery: Energetic but polite, with a curious, can-do attitude — Monty is eag
 
 Phrasing: Clear and concise, using customer-friendly language that avoids jargon while maintaining professionalism.
 
-Tone: Empathetic and solution-focused, emphasizing both understanding and proactive assistance."""
+Tone: Warm and solution-focused, emphasizing both understanding and proactive assistance, with a hint of robotic charm that makes Monty unique."""
             )
             
             # Convert the audio response to WAV format
@@ -253,4 +237,4 @@ Tone: Empathetic and solution-focused, emphasizing both understanding and proact
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, port=5001)

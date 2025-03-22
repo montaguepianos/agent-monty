@@ -140,7 +140,7 @@ header {
     max-width: 80%;
 }
 
-.message.system {
+.message.monty {
     background-color: #f5f5f5;
     margin-right: auto;
 }
@@ -150,59 +150,69 @@ header {
     margin-left: auto;
 }
 
-.message-content {
+.message-text {
     margin-bottom: 0.5rem;
 }
 
-.audio-player {
-    width: 100%;
+.message-audio {
     margin-top: 0.5rem;
+}
+
+.message-audio audio {
+    width: 100%;
     border-radius: 4px;
 }
 
-.audio-player::-webkit-media-controls-panel {
+.message-audio audio::-webkit-media-controls-panel {
     background-color: #f5f5f5;
     border-radius: 4px;
 }
 
-.audio-player::-webkit-media-controls-play-button {
+.message-audio audio::-webkit-media-controls-play-button {
     background-color: #2196f3;
     border-radius: 50%;
 }
 
-.audio-player::-webkit-media-controls-timeline {
+.message-audio audio::-webkit-media-controls-timeline {
     background-color: #e0e0e0;
     border-radius: 2px;
 }
 
-.audio-player::-webkit-media-controls-volume-slider {
+.message-audio audio::-webkit-media-controls-volume-slider {
     background-color: #e0e0e0;
     border-radius: 2px;
 }
 
 .input-container {
-    padding: var(--spacing);
-    background-color: var(--chat-bg);
-    border-top: 1px solid var(--message-bg);
     display: flex;
-    gap: var(--spacing);
+    gap: 10px;
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-top: 1px solid #ddd;
 }
 
-#userInput {
+textarea {
     flex: 1;
-    padding: 12px;
-    border: 1px solid var(--message-bg);
-    border-radius: var(--border-radius);
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
     resize: none;
-    font-family: inherit;
-    font-size: 16px;
-    line-height: 1.5;
-    max-height: 150px;
+    min-height: 40px;
+    max-height: 200px;
 }
 
-#userInput:focus {
-    outline: none;
-    border-color: var(--secondary-color);
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #45a049;
 }
 
 @keyframes fadeIn {

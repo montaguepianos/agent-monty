@@ -1,219 +1,78 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const chatMessages = document.getElementById('chatMessages');
+document.addEventListener('DOMContentLoaded', function() {
     const userInput = document.getElementById('userInput');
-    const sendButton = document.getElementById('sendMessage');
-    const clearButton = document.getElementById('clearChat');
-    const toggleVoiceButton = document.getElementById('toggleVoice');
-    
-    let isVoiceEnabled = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let sessionId = generateSessionId();
-    let currentAudio = null;
+    const sendButton = document.getElementById('sendButton');
+    const chatContainer = document.getElementById('chatContainer');
 
-    // Initialize audio recording
-    async function initializeAudioRecording() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    channelCount: 1,
-                    sampleRate: 24000
-                } 
-            });
-            
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus'
-            });
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                await sendVoiceMessage(audioBlob);
-            };
-
-            return true;
-        } catch (error) {
-            console.error('Error accessing microphone:', error);
-            return false;
-        }
-    }
-
-    // Generate a unique session ID
-    function generateSessionId() {
-        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    }
-
-    // Update voice button appearance
-    function updateVoiceButton() {
-        toggleVoiceButton.innerHTML = isVoiceEnabled ? 
-            '<i class="fas fa-microphone-slash"></i> Stop Recording' : 
-            '<i class="fas fa-microphone"></i> Start Recording';
-        toggleVoiceButton.classList.toggle('active', isVoiceEnabled);
-    }
-
-    // Add a message to the chat
     function addMessage(content, isUser = false, audioData = null) {
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? 'user' : 'system'}`;
+        messageDiv.className = `message ${isUser ? 'user' : 'monty'}`;
         
-        let messageContent = `<div class="message-content">${content}</div>`;
-        
-        // Add audio player if audio data is available
-        if (audioData && !isUser) {
-            const audioPlayer = document.createElement('audio');
-            audioPlayer.className = 'audio-player';
-            audioPlayer.style.display = 'none'; // Hide the audio player
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.textContent = content;
+        messageDiv.appendChild(textDiv);
+
+        if (!isUser && audioData) {
+            const audioDiv = document.createElement('div');
+            audioDiv.className = 'message-audio';
+            const audio = document.createElement('audio');
+            audio.style.display = 'none'; // Hide the audio element
             
             // Convert hex string back to Uint8Array
             const audioArray = new Uint8Array(audioData.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
             const audioBlob = new Blob([audioArray], { type: 'audio/mp3' });
             const audioUrl = URL.createObjectURL(audioBlob);
             
-            audioPlayer.src = audioUrl;
+            audio.src = audioUrl;
             
             // Play the audio automatically
-            audioPlayer.play().catch(error => {
+            audio.play().catch(error => {
                 console.error('Error playing audio:', error);
             });
             
             // Clean up the URL when audio is done playing
-            audioPlayer.addEventListener('ended', () => {
+            audio.addEventListener('ended', () => {
                 URL.revokeObjectURL(audioUrl);
-                audioPlayer.remove(); // Remove the audio element from the DOM
+                audio.remove(); // Remove the audio element from the DOM
             });
             
-            messageContent += audioPlayer.outerHTML;
+            audioDiv.appendChild(audio);
+            messageDiv.appendChild(audioDiv);
         }
-        
-        messageDiv.innerHTML = messageContent;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        chatContainer.appendChild(messageDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    // Handle sending messages
-    async function sendMessage() {
+    function sendMessage() {
         const message = userInput.value.trim();
-        if (!message) return;
+        if (message) {
+            addMessage(message, true);
+            userInput.value = '';
 
-        // Add user message to chat
-        addMessage(message, true);
-        userInput.value = '';
-
-        try {
-            const response = await fetch('/ask', {
+            fetch('/ask', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    message: message,
-                    session_id: sessionId
-                })
-            });
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            // Add Monty's response to chat with audio if available
-            addMessage(data.response, false, data.audio);
-
-        } catch (error) {
-            console.error('Error:', error);
-            addMessage('I apologize, but I encountered an error. Please try again.');
-        }
-    }
-
-    // Handle voice recording
-    async function toggleVoice() {
-        if (!mediaRecorder) {
-            const initialized = await initializeAudioRecording();
-            if (!initialized) {
-                alert('Could not access microphone. Please check your permissions.');
-                return;
-            }
-        }
-
-        isVoiceEnabled = !isVoiceEnabled;
-        updateVoiceButton();
-
-        if (isVoiceEnabled) {
-            audioChunks = [];
-            mediaRecorder.start(100); // Collect data every 100ms
-            toggleVoiceButton.classList.add('recording');
-        } else {
-            mediaRecorder.stop();
-            toggleVoiceButton.classList.remove('recording');
-        }
-    }
-
-    // Send voice message to server
-    async function sendVoiceMessage(audioBlob) {
-        try {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
-            formData.append('session_id', sessionId);
-
-            const response = await fetch('/voice', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-
-            // Add a visual indicator that voice message was sent
-            addMessage('🎤 Voice message sent', true);
-
-        } catch (error) {
-            console.error('Error sending voice message:', error);
-            addMessage('I apologize, but there was an error processing your voice message.');
-        }
-    }
-
-    // Event Listeners
-    sendButton.addEventListener('click', sendMessage);
-    clearButton.addEventListener('click', () => {
-        fetch('/clear-chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                session_id: sessionId
+                body: JSON.stringify({ message: message })
             })
-        }).then(() => {
-            chatMessages.innerHTML = `
-                <div class="message system">
-                    <div class="message-content">
-                        Hello! I'm Monty, your friendly assistant at Montague Pianos. How can I help you today?
-                    </div>
-                </div>
-            `;
-        });
-    });
-    toggleVoiceButton.addEventListener('click', toggleVoice);
+            .then(response => response.json())
+            .then(data => {
+                addMessage(data.response, false, data.audio);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                addMessage('Sorry, I encountered an error. Please try again.');
+            });
+        }
+    }
 
-    // Handle Enter key in textarea
-    userInput.addEventListener('keydown', (e) => {
+    sendButton.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
-    });
-
-    // Auto-resize textarea
-    userInput.addEventListener('input', () => {
-        userInput.style.height = 'auto';
-        userInput.style.height = userInput.scrollHeight + 'px';
     });
 }); 
