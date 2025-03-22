@@ -73,10 +73,6 @@ document.addEventListener('DOMContentLoaded', function() {
         messageDiv.appendChild(textDiv);
 
         if (!isUser && audioData) {
-            // Stop thinking sound when Monty starts speaking
-            thinkingSound.pause();
-            thinkingSound.currentTime = 0;
-            
             const audioDiv = document.createElement('div');
             audioDiv.className = 'message-audio';
             const audio = document.createElement('audio');
