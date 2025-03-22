@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'https://www.montaguepianos.co.uk/wp-content/uploads/2023/11/montychristmashumming.mp3',
         'https://www.montaguepianos.co.uk/wp-content/uploads/2023/11/montythinking.mp3',
         'https://www.montaguepianos.co.uk/wp-content/uploads/2023/11/montythinking2.wav',
-        'https://www.montaguepianos.co.uk/wp-content/uploads/2023/10/keyboard-typing-5997.mp3'
+        'https://www.montaguepianos.co.uk/wp-content/uploads/2025/03/keyboard-typing.mp3'
     ];
 
     // Create thinking sound audio element
