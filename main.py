@@ -72,7 +72,7 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
     - Magoo Is Lee's very technically talented friend. He's been coding for literally decades and legend has it that he dreams in PHP. The last time we counted, he'd written 16.3 billion lines of code! 
 
     Montague Pianos Services
-    - Piano removals (as of Oct 23, our minimum local removal charge is £200 Plus VAT)
+    - Piano removals (as of Feb 25, our minimum local removal charge is £250 Plus VAT)
     - Piano Tuning (as of July 24, our local piano tuning charge is £85)
     - Piano Repair
     - Piano Restoration
