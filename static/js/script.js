@@ -111,6 +111,9 @@ document.addEventListener('DOMContentLoaded', function() {
             addMessage(message, true);
             userInput.value = '';
             
+            // Notify parent window that we're sending a message
+            window.parent.postMessage({ type: 'monty-send' }, '*');
+            
             typingIndicator.style.display = 'block';
             playRandomThinkingSound();
             
@@ -133,6 +136,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 addMessage(data.response, false, data.audio);
+                
+                // Notify parent window that we received a reply
+                window.parent.postMessage({ type: 'monty-reply' }, '*');
             })
             .catch(error => {
                 console.error('Error:', error);

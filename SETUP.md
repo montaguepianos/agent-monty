@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "changed the frontend added thinking sounds"
+git commit -m "Describe what you changed"
 git push
 ```
 
@@ -57,6 +57,29 @@ git push --set-upstream origin main
 ```
 
 > ⚠️ If you get authentication errors, use your GitHub **personal access token** as the password.
+
+---
+
+### 🛡️ Fixing Push Protection (Secret Detected)
+If GitHub blocks your push with an error like:
+```
+Push cannot contain secrets
+OpenAI API Key found in .env
+```
+
+✅ Simply open the unblock URL GitHub provides (looks like this):
+```
+https://github.com/USERNAME/REPO/security/secret-scanning/unblock-secret/xxxxxxxxxx
+```
+
+Click **"Allow this push"**, then run:
+```bash
+git push
+```
+
+The push will now succeed.
+
+> 💡 You should still remove `.env` from tracking and move secrets to Render's Environment Variables panel.
 
 ---
 
@@ -86,7 +109,7 @@ You can embed or share this link anywhere (WordPress iframe, etc.)
 
 ---
 
-### ♻ Optional Cleanup (for later)
+### ♻️ Optional Cleanup (for later)
 If `agent-monty-env/` or other big folders got committed:
 ```bash
 echo agent-monty-env/ >> .gitignore
@@ -104,6 +127,6 @@ git push
 
 ---
 
-Nice work, future Lee. You deployed Monty like a boss.
+Nice work, future Lee. You deployed Monty like a boss. 
 If anything breaks, just message ChatGPT 4o... not O1. O1 stinks.
 
