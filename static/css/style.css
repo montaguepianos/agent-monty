@@ -124,7 +124,8 @@ header {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - 2rem); /* Account for container padding */
+    margin-bottom: 80px; /* Make space for input container */
 }
 
 .chat-messages {
@@ -136,7 +137,7 @@ header {
     background-position: right center;
     background-size: 30% auto;
     background-repeat: no-repeat;
-    height: 400px;
+    height: calc(100% - 80px); /* Account for input container */
 }
 
 .message {
@@ -209,6 +210,8 @@ header {
     display: flex;
     gap: 0.5rem;
     z-index: 1000;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 textarea {
@@ -227,7 +230,7 @@ textarea {
 
 button {
     padding: 0.75rem 1.5rem;
-    background-color: #007bff;
+    background-color: #4CAF50; /* Restore green color */
     color: white;
     border: none;
     border-radius: 8px;
