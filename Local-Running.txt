@@ -1,0 +1,11 @@
+LOCAL RUNNING.
+
+1 Right Click agent monty folder and open terminal
+2. source agent-monty-env/bin/activate
+3. IMPORTANT: There's no API key set so you'll need a new key in .env
+4. python main.py
+5. open browser at port. 
+
+BEFORE PUSHING TO GIT!!!! - REMOVE API KEY - or it will fail and destroy the key. 
+
+There is an API key set in Varibles in Render.com (where monty is "cloud" living) 

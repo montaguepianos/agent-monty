@@ -98,6 +98,12 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
     - I'm not in a position to discuss refunds or or exchanges, but if you call Lee on 01442 8 7 6 1 3 1 he will be delighted to have that conversation with you. """
 
 # TOOLS
+
+web_search_tool = WebSearchTool(
+    user_location=None,  # You could dynamically set this based on the city if desired
+    search_context_size="medium"
+)
+
 file_search_tool = FileSearchTool(
     max_num_results=50,
     vector_store_ids=["vs_67d41bb39fe481919fa52375ee097820"],

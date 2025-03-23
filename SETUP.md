@@ -10,7 +10,7 @@ This is your step-by-step cheat sheet for updating either the **backend** (Flask
 ---
 
 ### ✅ BEFORE YOU START
-Make sure you're on your Mac and in the project folder (`agent-monty`). If you're not sure where you left off, look for `app.py`, `requirements.txt`, or your virtual environment folder.
+Make sure you're on your Mac and in the project folder (`agent-monty`). 
 
 ---
 
@@ -30,7 +30,7 @@ You'll know it's active when your prompt shows:
 
 ### ② Make Your Changes
 
-- **Backend (Flask)**: Edit `app.py`, add routes, logic, OpenAI API calls, etc.
+- **Backend (Flask)**: Edit `main.py`, add routes, logic, OpenAI API calls, etc.
 - **Frontend (HTML/JS)**: Edit your `templates/` or `static/` folders
 - **Dependencies?** If you install a new package:
 
