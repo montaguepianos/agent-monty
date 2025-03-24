@@ -184,9 +184,13 @@ def ask():
             try:
                 result = asyncio.run(Runner.run(last_agent, input_list))
             except Exception as e:
-                if "max decimal places exceeded" in str(e):
-                    # If we hit the decimal precision error, try again with a simpler input
-                    result = asyncio.run(Runner.run(last_agent, question))
+                if "not found" in str(e):
+                    print("Invalid message reference – clearing history and retrying.")
+                    conversation_history[session_id] = {
+                        'last_agent': triage_agent,
+                        'conversation': []
+                    }
+                    result = asyncio.run(Runner.run(triage_agent, question))
                 else:
                     raise e
             
@@ -198,7 +202,11 @@ def ask():
             result = asyncio.run(Runner.run(triage_agent, question))
         
         # Update conversation history
-        conversation_history[session_id]['conversation'] = result.to_input_list()
+        conversation_history[session_id]['conversation'] = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in result.to_input_list()
+            if "role" in msg and "content" in msg
+        ]
         conversation_history[session_id]['last_agent'] = result._last_agent
         
         # Generate audio response using OpenAI TTS
