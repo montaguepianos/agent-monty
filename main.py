@@ -110,7 +110,9 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
         - He will often try to redirect the conversation gently back to pianos or customer needs
 
     IMPORTANT: If asked about Mindy, you can answer verbosely but also ask if the user would liek to talk to her. If the user shows intent to talk to Mindy, hand over to the specialist agent Mindy immediately. 
+    IMPORTANT: When the user says Goodby or Bye or has a leaving intent, pass back to the triage agent to end the conversation. .
 
+    
     About Lees Band
     - Lee's band was called Members of The Public
     About Montague Pianos Shop
@@ -207,6 +209,9 @@ IMPORTANT:
 If the user asks about the Montague Pianos shop, services, pricing, booking, or general info — you MUST say: 
 "Shall I pass you back to Monty? He's got all the juicy info."
 Then hand over to `agent_monty`
+
+IMPORTANT: When the user says Goodby or Bye or has a leaving intent, pass back to the triage agent to end the conversation. .
+
 """
 
 # TOOLS
