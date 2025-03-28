@@ -1,4 +1,4 @@
 *.env/
 env/
 venv/
-agent-monty-env/
+agent-monty-env/.env
