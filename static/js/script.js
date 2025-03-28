@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function addMessage(content, isUser = false, audioData = null) {
+        console.log('Adding message:', { content, isUser, hasAudio: !!audioData });
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user' : 'monty'}`;
         
@@ -73,6 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
         messageDiv.appendChild(textDiv);
 
         if (!isUser && audioData) {
+            console.log('Processing audio data, length:', audioData.length);
             // Stop thinking sound when Monty starts speaking
             thinkingSound.pause();
             thinkingSound.currentTime = 0;
@@ -82,24 +84,39 @@ document.addEventListener('DOMContentLoaded', function() {
             const audio = document.createElement('audio');
             audio.style.display = 'none';
             
-            const audioArray = new Uint8Array(audioData.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-            const audioBlob = new Blob([audioArray], { type: 'audio/mp3' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            audio.src = audioUrl;
-            
-            audio.play().catch(error => {
-                console.error('Error playing audio:', error);
-                showError('Error playing audio response');
-            });
-            
-            audio.addEventListener('ended', () => {
-                URL.revokeObjectURL(audioUrl);
-                audio.remove();
-            });
-            
-            audioDiv.appendChild(audio);
-            messageDiv.appendChild(audioDiv);
+            try {
+                console.log('Converting hex to audio array...');
+                const audioArray = new Uint8Array(audioData.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                console.log('Audio array created, length:', audioArray.length);
+                
+                const audioBlob = new Blob([audioArray], { type: 'audio/mp3' });
+                console.log('Audio blob created, size:', audioBlob.size);
+                
+                const audioUrl = URL.createObjectURL(audioBlob);
+                console.log('Audio URL created:', audioUrl);
+                
+                audio.src = audioUrl;
+                
+                console.log('Attempting to play audio...');
+                audio.play().then(() => {
+                    console.log('Audio playback started successfully');
+                }).catch(error => {
+                    console.error('Error playing audio:', error);
+                    showError('Error playing audio response');
+                });
+                
+                audio.addEventListener('ended', () => {
+                    console.log('Audio playback ended');
+                    URL.revokeObjectURL(audioUrl);
+                    audio.remove();
+                });
+                
+                audioDiv.appendChild(audio);
+                messageDiv.appendChild(audioDiv);
+            } catch (error) {
+                console.error('Error processing audio data:', error);
+                showError('Error processing audio response');
+            }
         }
 
         chatContainer.appendChild(messageDiv);
@@ -121,6 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
             typingIndicator.style.display = 'block';
             playRandomThinkingSound();
             
+            console.log('Sending message to server...');
             fetch('/ask', {
                 method: 'POST',
                 headers: {
@@ -130,11 +148,13 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
+                console.log('Received response from server:', data);
                 typingIndicator.style.display = 'none';
                 thinkingSound.pause();
                 thinkingSound.currentTime = 0;
                 
                 if (data.error) {
+                    console.error('Server error:', data.error);
                     showError(data.error);
                     return;
                 }
