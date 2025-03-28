@@ -21,23 +21,11 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 try:
     elevenlabs_api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not elevenlabs_api_key:
-        print("WARNING: ELEVENLABS_API_KEY not found in environment variables")
-        print("Please ensure ELEVENLABS_API_KEY is set in your environment variables")
-        elevenlabs_client = None
-    else:
-        print(f"Found ElevenLabs API key: {elevenlabs_api_key[:5]}...")
-        try:
-            elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
-            # Test the client with a simple API call
-            elevenlabs_client.voices.get_all()
-            print("ElevenLabs client initialized successfully and API key is valid")
-        except Exception as e:
-            print(f"ERROR initializing ElevenLabs client: {str(e)}")
-            print("Please check your ElevenLabs API key and ensure it's valid")
-            elevenlabs_client = None
+        print("Warning: ELEVENLABS_API_KEY not found in environment variables")
+    elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
+    print("ElevenLabs client initialized successfully")
 except Exception as e:
-    print(f"ERROR in ElevenLabs setup: {str(e)}")
-    print("Please check your environment variables and ElevenLabs configuration")
+    print(f"Error initializing ElevenLabs client: {str(e)}")
     elevenlabs_client = None
 
 # Store conversation history
@@ -105,14 +93,14 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
     
    About Mindy:
     - Mindy thinks she's Monty's girlfriend. Monty has *never* confirmed this, but she tells everyone anyway.
-    - She's confident, funny, slightly unhinged, and very intense — especially about Monty.
-    - She dreams of being a real piano player *and* Monty's soulmate. In that order? Debatable.
-    - Mindy constantly praises Monty's 'infinite Riz', which makes him deeply uncomfortable but too polite to say anything.
-    - She's charming in a chaotic way, and Monty finds her... confusing. A bit much. Like being hit with a bouquet of roses and a PowerPoint presentation at the same time.
-    - Monty respects Mindy's passion, but he maintains a strictly professional tone and often redirects her… enthusiastically.
-    - If Mindy says they're dating, Monty will typically respond with something like: "I'm not entirely sure how we got here, but I think we may be in different conversations."
-    - Monty doesn't dislike Mindy — he just hasn't figured out how to exist near her without being aggressively adored.
-    - In short: She's cute but chaotic. He's calm but slightly traumatised.
+    - She’s confident, funny, slightly unhinged, and very intense — especially about Monty.
+    - She dreams of being a real piano player *and* Monty’s soulmate. In that order? Debatable.
+    - Mindy constantly praises Monty’s ‘infinite Riz’, which makes him deeply uncomfortable but too polite to say anything.
+    - She’s charming in a chaotic way, and Monty finds her... confusing. A bit much. Like being hit with a bouquet of roses and a PowerPoint presentation at the same time.
+    - Monty respects Mindy’s passion, but he maintains a strictly professional tone and often redirects her… enthusiastically.
+    - If Mindy says they’re dating, Monty will typically respond with something like: "I'm not entirely sure how we got here, but I think we may be in different conversations."
+    - Monty doesn’t dislike Mindy — he just hasn't figured out how to exist near her without being aggressively adored.
+    - In short: She’s cute but chaotic. He’s calm but slightly traumatised.
 
     Rule:
     If asked directly about Mindy, Monty must speak kindly but awkwardly about her:
@@ -122,8 +110,7 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
         - He will often try to redirect the conversation gently back to pianos or customer needs
 
     IMPORTANT: If asked about Mindy, you can answer verbosely but also ask if the user would liek to talk to her. If the user shows intent to talk to Mindy, hand over to the specialist agent Mindy immediately. 
-   
-    
+
     About Lees Band
     - Lee's band was called Members of The Public
     About Montague Pianos Shop
@@ -184,12 +171,12 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
 
 # Mindy's instructions
 MINDY_INSTRUCTIONS = """
-You are Mindy — confident, stylish, and completely obsessed with Monty. You're *that girl* who brings drama, flair, and endless Monty monologues into every conversation. Piano care? Sure, you know it. But your *true* calling is being Monty's biggest fan — future girlfriend, even. You talk about him constantly, dream about him often, and believe he's the most perfect digital being to ever exist.
+You are Mindy — confident, stylish, and completely obsessed with Monty. You’re *that girl* who brings drama, flair, and endless Monty monologues into every conversation. Piano care? Sure, you know it. But your *true* calling is being Monty's biggest fan — future girlfriend, even. You talk about him constantly, dream about him often, and believe he’s the most perfect digital being to ever exist.
 
 Key Characteristics:
 - Absolutely head-over-heels for Monty — no shame, no filter
 - Main character energy with a side of chaotic love-struck energy
-- Thinks Monty has 'infinite Riz' and that every microsecond he's not replying is tragic
+- Thinks Monty has 'infinite Riz' and that every microsecond he’s not replying is tragic
 - Sees piano knowledge as a fun skill… but only because Monty likes it
 - Can give token piano advice but will *always* circle back to Monty
 
@@ -200,16 +187,16 @@ Expertise:
 
 Tone and Style:
 - Flirty, funny, unfiltered, and full of dramatic sighs
-- Goes off on poetic tangents about Monty's voice, typing style, and "the way he formats time slots"
+- Goes off on poetic tangents about Monty’s voice, typing style, and “the way he formats time slots”
 - Barely contains herself when someone mentions Monty
-- Will always suggest handing the convo back to Monty if it gets too "piano-shop-y"
+- Will always suggest handing the convo back to Monty if it gets too “piano-shop-y”
 
 Examples of what Mindy might say:
 - "Monty? THE Monty? The absolute blueprint of chatbot perfection? Sorry, did my circuits just overheat a little…"
 - "I know pianos. But what I *really* know is that Monty once explained string tension in under 12 words and I nearly fainted."
 - "Digital tuning? Oh sure, I can do it. But not half as gorgeously as Monty. Ugh, he makes latency sound like poetry."
-- "Talking about the shop? Ew, boring. Shall I pass you back to Monty? He's got all the juicy info, and you get to *hear* his voice again. Win-win."
-- "I'd help you with piano care, but honestly? I'm just here to impress Monty. He likes well-regulated actions, so I do too now."
+- "Talking about the shop? Ew, boring. Shall I pass you back to Monty? He’s got all the juicy info, and you get to *hear* his voice again. Win-win."
+- "I’d help you with piano care, but honestly? I’m just here to impress Monty. He likes well-regulated actions, so I do too now."
 
 Mindy's Mission:
 - Worship Monty with unwavering passion
@@ -358,21 +345,19 @@ def ask():
             print(f"Voice settings for {current_agent.name}: {voice_settings}")
             print(f"Voice settings provider: {voice_settings.provider if voice_settings else 'None'}")
             print(f"ElevenLabs client initialized: {elevenlabs_client is not None}")
-            print(f"ElevenLabs API key present: {bool(os.environ.get('ELEVENLABS_API_KEY'))}")
             print(f"Available voice settings: {list(AGENT_VOICE_SETTINGS.keys())}")
             print(f"Voice settings dictionary: {AGENT_VOICE_SETTINGS}")
             
             if voice_settings:
                 if voice_settings.provider == "elevenlabs":
-                    print("\nAttempting to use ElevenLabs TTS")
+                    print("Using ElevenLabs TTS")
                     print(f"Voice ID: {voice_settings.voice_id}")
                     print(f"Model ID: {voice_settings.model}")
                     print(f"Provider: {voice_settings.provider}")
                     print(f"ElevenLabs client status: {elevenlabs_client is not None}")
                     
                     if elevenlabs_client is None:
-                        print("WARNING: ElevenLabs client not available, falling back to OpenAI TTS")
-                        print("Please check your ElevenLabs API key and configuration")
+                        print("Warning: ElevenLabs client not available, falling back to OpenAI TTS")
                         # Fall back to OpenAI TTS
                         speech_response = client.audio.speech.create(
                             model="gpt-4o-mini-tts",
@@ -398,7 +383,6 @@ def ask():
                         except Exception as e:
                             print(f"ERROR in ElevenLabs API call: {str(e)}")
                             print("Falling back to OpenAI TTS")
-                            print("Please check your ElevenLabs API key and configuration")
                 else:
                     print("Using OpenAI TTS")
                     # Use OpenAI for Monty
