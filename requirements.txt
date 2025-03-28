@@ -9,6 +9,7 @@ cloudevents==1.11.0
 colorama==0.4.6
 deprecation==2.1.0
 distro==1.9.0
+elevenlabs==1.55.0
 Flask==3.0.2
 Flask-Cors==4.0.0
 functions-framework==3.5.0
