@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 import re
 import uuid
 import pprint
+from flask_cors import CORS
 
 # Load environment variables
 load_dotenv()
