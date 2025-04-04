@@ -38,9 +38,9 @@ except Exception as e:
 # Store conversation history
 conversation_history = {}
 
-@function_tool
-def check_piano_tuning_availability(postcode: str) -> str:
-    """Check available piano tuning slots."""
+# This is the normal function without the decorator, for direct calling
+def check_piano_tuning_availability_direct(postcode: str) -> str:
+    """Check available piano tuning slots. Direct callable version without the function_tool decorator."""
     try:
         print(f"\n==================================================")
         print(f"Checking availability for postcode: {postcode}")
@@ -152,20 +152,25 @@ These are examples of our typical available slots. Would any of these days/times
         # Ultimate fallback
         return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
+@function_tool
+def check_piano_tuning_availability(postcode: str) -> str:
+    """Check available piano tuning slots."""
+    return check_piano_tuning_availability_direct(postcode)
+
 def handle_piano_tuning_request(user_input: str) -> str:
     """Handle piano tuning related requests."""
     # Extract postcode if present
     postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', user_input, re.IGNORECASE)
     if postcode_match:
         postcode = postcode_match.group().upper()
-        return check_piano_tuning_availability(postcode)
+        return check_piano_tuning_availability_direct(postcode)
     else:
         return "I'll need your postcode to check available tuning slots. Could you please provide your postcode?"
 
 def handle_more_options_request(user_input: str, context: dict) -> str:
     """Handle requests for more tuning options."""
     if 'last_postcode' in context:
-        return check_piano_tuning_availability(context['last_postcode'])
+        return check_piano_tuning_availability_direct(context['last_postcode'])
     else:
         return "I'll need your postcode to check available tuning slots. Could you please provide your postcode?"
 
@@ -735,7 +740,7 @@ def ask():
                 if postcode_match:
                     postcode = postcode_match.group()
                     # Call our function directly
-                    response_text = check_piano_tuning_availability(postcode)
+                    response_text = check_piano_tuning_availability_direct(postcode)
                     
                     # Generate audio for the response
                     audio_data = None
