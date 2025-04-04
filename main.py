@@ -46,44 +46,81 @@ def check_piano_tuning_availability(postcode: str) -> str:
         intermediate_message = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!"
         
         print(f"Checking availability for postcode: {postcode}")
-        response = requests.post(
-            'https://monty-mcp.onrender.com/check-availability',
-            json={'postcode': postcode}
-        )
+        try:
+            # Detailed logging for request
+            print(f"Making request to: https://monty-mcp.onrender.com/check-availability")
+            print(f"Request payload: {{'postcode': '{postcode}'}}")
+            
+            response = requests.post(
+                'https://monty-mcp.onrender.com/check-availability',
+                json={'postcode': postcode},
+                timeout=30  # Add a longer timeout
+            )
+            
+            print(f"Response status code: {response.status_code}")
+            print(f"Response headers: {response.headers}")
+            
+            if response.content:
+                try:
+                    print(f"Response content (first 200 chars): {response.content[:200]}")
+                except:
+                    print("Could not display response content")
+        except requests.exceptions.RequestException as req_err:
+            print(f"Request exception: {req_err}")
+            return f"I'm having trouble connecting to the booking system. Error: {str(req_err)}"
         
         if response.status_code == 200:
-            data = response.json()
-            slots = data.get('available_slots', [])
-            total_slots = data.get('total_slots', 0)
-            
-            if not slots:
-                return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
-            
-            # Format the slots into a readable message
-            slot_list = []
-            for i, slot in enumerate(slots, 1):
-                date = datetime.strptime(slot['date'], '%Y-%m-%d').strftime('%A, %B %d')
-                slot_list.append(f"{i}. {date} at {slot['time']}")
-            
-            message = (
-                f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
-                "\n".join(slot_list) +
-                "\n\nWould any of these times work for you? If not, I can suggest more options."
-            )
-            return message
+            try:
+                data = response.json()
+                slots = data.get('available_slots', [])
+                total_slots = data.get('total_slots', 0)
+                
+                print(f"Successfully parsed response. Found {total_slots} slots.")
+                
+                if not slots:
+                    return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
+                
+                # Format the slots into a readable message
+                slot_list = []
+                for i, slot in enumerate(slots, 1):
+                    date = datetime.strptime(slot['date'], '%Y-%m-%d').strftime('%A, %B %d')
+                    slot_list.append(f"{i}. {date} at {slot['time']}")
+                
+                message = (
+                    f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
+                    "\n".join(slot_list) +
+                    "\n\nWould any of these times work for you? If not, I can suggest more options."
+                )
+                return message
+            except json.JSONDecodeError as json_err:
+                print(f"JSON decode error: {json_err}")
+                print(f"Full response content: {response.content}")
+                return "I received a response from the booking system but couldn't understand it. Please try again or call Lee on 01442 876131."
             
         elif response.status_code == 400:
-            data = response.json()
-            if 'message' in data:
-                return data['message']
-            return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
+            try:
+                data = response.json()
+                if 'message' in data:
+                    return data['message']
+                return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
+            except json.JSONDecodeError as json_err:
+                print(f"JSON decode error on 400 response: {json_err}")
+                return "I'm having trouble understanding the response from the booking system. Please try again or call Lee on 01442 876131."
             
         else:
-            return "I'm having trouble checking the availability. Please try again or call Lee on 01442 876131."
+            print(f"Unexpected status code: {response.status_code}")
+            try:
+                print(f"Full response content: {response.content}")
+            except:
+                print("Could not display full response content")
+                
+            return f"I'm having trouble checking the availability (Status code: {response.status_code}). Please try again or call Lee on 01442 876131."
             
     except Exception as e:
-        print(f"Error checking availability: {e}")
-        return "I'm having trouble checking the availability. Please try again or call Lee on 01442 876131."
+        print(f"Error checking availability: {type(e).__name__}: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return f"I'm having trouble checking the availability due to a system error. Please try again or call Lee on 01442 876131."
 
 def handle_piano_tuning_request(user_input: str) -> str:
     """Handle piano tuning related requests."""
@@ -152,22 +189,37 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         
         # Make request to booking server
         print("\nMaking request to booking server...")
-        response = requests.post(
-            'https://monty-mcp.onrender.com/create-booking',
-            json={
-                'date': formatted_date, 
-                'time': time,
-                'customer_name': customer_name,
-                'address': address,
-                'phone': phone
-            },
-            headers={'Content-Type': 'application/json'}
-        )
+        print(f"URL: https://monty-mcp.onrender.com/create-booking")
+        print(f"Request payload: {{'date': '{formatted_date}', 'time': '{time}', 'customer_name': '{customer_name}', 'address': '{address}', 'phone': '{phone}'}}")
         
-        print(f"Response status code: {response.status_code}")
-        # print(f"Response body: {response.text[:500]}...") # Optional: log response body
-
-        # --- Return only the message text --- 
+        try:
+            response = requests.post(
+                'https://monty-mcp.onrender.com/create-booking',
+                json={
+                    'date': formatted_date, 
+                    'time': time,
+                    'customer_name': customer_name,
+                    'address': address,
+                    'phone': phone
+                },
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            print(f"Response status code: {response.status_code}")
+            print(f"Response headers: {response.headers}")
+            
+            if response.content:
+                try:
+                    print(f"Response content (first 200 chars): {response.content[:200]}")
+                except:
+                    print("Could not display response content")
+                    
+        except requests.exceptions.RequestException as req_err:
+            print(f"Request exception: {req_err}")
+            return f"I'm having trouble connecting to the booking system. Error: {str(req_err)}"
+        
+        # --- Process the response --- 
         try:
             data = response.json()
             # Prioritize error message if status is not OK
@@ -185,18 +237,23 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                  # Fallback success message if server message missing
                  print(f"DEBUG: Tool returning generic success message (server message missing).")
                  return f"Booking confirmed for {formatted_date} at {time}."
-        except json.JSONDecodeError:
-            print(f"DEBUG: Tool returning error due to JSON decode failure.")
+        except json.JSONDecodeError as json_err:
+            print(f"JSON decode error: {json_err}")
+            print(f"Full response content: {response.content}")
             return f"Booking system response was unclear (Status: {response.status_code}). Please try again."
         except Exception as inner_e:
              print(f"DEBUG: Tool returning error due to inner processing failure: {inner_e}")
+             import traceback
+             print(f"Inner exception traceback: {traceback.format_exc()}")
              return f"Error processing booking system response (Status: {response.status_code}). Please try again."
 
     except requests.exceptions.RequestException as e: 
         print(f"Error connecting to booking server in tool: {e}")
         return "I'm having trouble connecting to the booking system right now. Please try again later or call Lee."
     except Exception as e:
-        print(f"Error in book_piano_tuning tool processing: {e}")
+        print(f"Error in book_piano_tuning tool processing: {type(e).__name__}: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return "I apologize, but an unexpected error occurred during the booking process."
 
 class VoiceSettings:

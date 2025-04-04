@@ -323,6 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Sending message to server...');
             try {
+                console.log('Making API request to /ask endpoint...');
                 const response = await fetch('/ask', {
                     method: 'POST',
                     headers: {
@@ -331,11 +332,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({ message: message })
                 });
 
+                console.log('Response status:', response.status, response.statusText);
+                
                 if (!response.ok) {
-                    throw new Error('Failed to get response');
+                    console.error(`Error response: ${response.status} ${response.statusText}`);
+                    
+                    // Try to get more error details if available
+                    try {
+                        const errorData = await response.json();
+                        console.error('Error details:', errorData);
+                        throw new Error(`Failed to get response: ${errorData.error || response.statusText}`);
+                    } catch (jsonError) {
+                        // If we can't parse JSON, just use the status
+                        console.error('Could not parse error response as JSON');
+                        throw new Error(`Failed to get response: ${response.status} ${response.statusText}`);
+                    }
                 }
 
                 const data = await response.json(); // Get the JSON response
+                console.log('Response received:', data ? 'success' : 'empty data');
                 if (data.response) {
                     // Add the text message to the chat (not an intermediate message)
                     addMessage(data.response, false, data.audio, false);
