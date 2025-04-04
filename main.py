@@ -107,8 +107,10 @@ def check_piano_tuning_availability(postcode: str) -> str:
                             return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
                         
                         # Format the slots into a readable message
+                        # IMPORTANT: Only show the first 3 slots to reduce response size
                         slot_list = []
-                        for i, slot in enumerate(slots[:10], 1):  # Limit to first 10 slots to avoid large messages
+                        max_slots_to_show = 3  # Reduced from 10 to 3
+                        for i, slot in enumerate(slots[:max_slots_to_show], 1):  
                             try:
                                 # Ensure we're working with naive datetime objects
                                 date = datetime.strptime(slot['date'], '%Y-%m-%d')
@@ -121,16 +123,18 @@ def check_piano_tuning_availability(postcode: str) -> str:
                         
                         # Add a note if we're only showing a subset of slots
                         additional_info = ""
-                        if total_slots > 10:
-                            additional_info = f"\n\n(Showing the first 10 of {total_slots} available slots)"
+                        if total_slots > max_slots_to_show:
+                            additional_info = f"\n\n(Showing {max_slots_to_show} of {total_slots} available slots)"
                         
                         message = (
-                            f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
+                            f"I found these tuning slots:\n\n" +  # Shortened message
                             "\n".join(slot_list) +
                             additional_info +
-                            "\n\nWould any of these times work for you? If not, I can suggest more options."
+                            "\n\nWould any work for you?"  # Shortened question
                         )
                         print("Successfully generated response message")
+                        print(f"Response message length: {len(message)}")
+                        print(f"Response message: {message}")
                         print("==================================================\n")
                         return message
                     except json.JSONDecodeError as json_err:
@@ -658,12 +662,14 @@ def clear_chat():
 
 @app.route('/ask', methods=['POST'])
 def ask():
-    data = request.get_json()
-    question = data.get('message', '')
-    session_id = data.get('session_id', 'default')
-    
     try:
         print("\n==================================================")
+        print("Starting /ask endpoint processing")
+        
+        data = request.get_json()
+        question = data.get('message', '')
+        session_id = data.get('session_id', 'default')
+        
         print(f"Processing request for question: {question[:50]}...")
         
         # Get or initialize conversation history for this session
@@ -733,8 +739,14 @@ def ask():
                 print(f"Error running triage agent for new question: {new_q_err}")
                 raise new_q_err
         
-        print(f"Agent response: {result.final_output[:100]}...")
+        print(f"Agent response (first 100 chars): {result.final_output[:100]}...")
+        print(f"Agent response length: {len(result.final_output)}")
         final_message_text = result.final_output # Use agent's text response directly
+        
+        # Ensure the final_message_text is not too long (for debugging)
+        if len(final_message_text) > 1000:
+            print(f"WARNING: Final message is very long ({len(final_message_text)} chars). Truncating for testing.")
+            final_message_text = final_message_text[:1000] + "... [message truncated due to length]"
         
         # Update conversation history
         try:
@@ -781,16 +793,27 @@ def ask():
                         # Fallback needed if you want audio
                 else:
                     # Use OpenAI
-                    speech_response = client.audio.speech.create(
-                        model=voice_settings.model,
-                        voice=voice_settings.voice,
-                        input=final_message_text, 
-                        instructions=voice_settings.instructions
-                    )
-                    audio_data = speech_response.content
+                    try:
+                        print("Using OpenAI for text-to-speech...")
+                        speech_response = client.audio.speech.create(
+                            model=voice_settings.model,
+                            voice=voice_settings.voice,
+                            input=final_message_text, 
+                            instructions=voice_settings.instructions
+                        )
+                        audio_data = speech_response.content
+                        print("OpenAI speech generation successful")
+                    except Exception as openai_err:
+                        print(f"Error generating speech with OpenAI: {openai_err}")
+                        audio_data = None
                 
                 if audio_data:
-                    hex_audio = audio_data.hex()
+                    try:
+                        hex_audio = audio_data.hex()
+                        print(f"Converted audio data to hex (length: {len(hex_audio)})")
+                    except Exception as hex_err:
+                        print(f"Error converting audio to hex: {hex_err}")
+                        hex_audio = None
             
             # Construct the JSON response
             response_data = {
@@ -804,22 +827,34 @@ def ask():
             if 'audio' in debug_data:
                 debug_data['audio'] = f"[Audio data length: {len(debug_data['audio']) if debug_data['audio'] else 0}]"
             print(f"Response data: {debug_data}")
+            
+            try:
+                print("Creating jsonify response...")
+                response = jsonify(response_data)
+                print("Response created successfully")
+                print("==================================================\n")
+                return response
+            except Exception as jsonify_err:
+                print(f"ERROR during jsonify: {jsonify_err}")
+                import traceback
+                print(f"Jsonify error traceback: {traceback.format_exc()}")
                 
-            response = jsonify(response_data)
-            print("Response created successfully (simple text + audio)")
-            print("==================================================\n")
-            return response
+                # Try a simple response without audio as fallback
+                print("Attempting fallback response without audio...")
+                simple_response = {'response': final_message_text, 'agent': current_agent.name}
+                return jsonify(simple_response)
 
         except Exception as e:
             print(f"Error generating audio or constructing final response: {str(e)}")
             import traceback
             print(f"Audio error traceback: {traceback.format_exc()}")
             # Fallback response without audio if error occurs
-            return jsonify({
+            simple_response = {
                 'response': final_message_text,
                 'agent': current_agent.name if 'current_agent' in locals() else 'Unknown Agent',
                 'audio': None
-            })
+            }
+            return jsonify(simple_response)
         
     except Exception as e:
         print(f"Error processing message: {str(e)}")
@@ -829,8 +864,14 @@ def ask():
         print("==================================================\n")
         
         # Check if postcode is in question and this might be a tuning request
-        contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
-        contains_tuning_keywords = re.search(r'(piano|tuning|tune|appointment)', question, re.IGNORECASE)
+        contains_postcode = False
+        contains_tuning_keywords = False
+        try:
+            if 'question' in locals():
+                contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE) is not None
+                contains_tuning_keywords = re.search(r'(piano|tuning|tune|appointment)', question, re.IGNORECASE) is not None
+        except Exception as regex_err:
+            print(f"Error in regex processing: {regex_err}")
         
         if contains_postcode or contains_tuning_keywords:
             # Provide straightforward error message for tuning inquiries
