@@ -83,8 +83,15 @@ def check_piano_tuning_availability(postcode: str) -> str:
                 # Format the slots into a readable message
                 slot_list = []
                 for i, slot in enumerate(slots, 1):
-                    date = datetime.strptime(slot['date'], '%Y-%m-%d').strftime('%A, %B %d')
-                    slot_list.append(f"{i}. {date} at {slot['time']}")
+                    try:
+                        # Ensure we're working with naive datetime objects
+                        date = datetime.strptime(slot['date'], '%Y-%m-%d')
+                        formatted_date = date.strftime('%A, %B %d')
+                        slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
+                    except Exception as date_err:
+                        print(f"Error formatting date: {date_err}")
+                        # Fallback to using the date string directly
+                        slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
                 
                 message = (
                     f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
@@ -176,12 +183,35 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         
         # Check if date is already in YYYY-MM-DD format
         try:
+            # Ensure we're working with naive datetime objects
             parsed_date = datetime.strptime(date, '%Y-%m-%d')
             formatted_date = date
         except ValueError:
             try:
-                parsed_date = datetime.strptime(date, '%A, %B %d')
-                parsed_date = parsed_date.replace(year=datetime.now().year) # Use current year or adjust as needed
+                # Try to parse the date in the format "Monday, January 1"
+                # Replace missing year with current year
+                current_year = datetime.now().year
+                # Try to handle different date formats
+                if ',' in date:
+                    # Format like "Monday, January 1"
+                    parsed_date = datetime.strptime(date, '%A, %B %d')
+                    parsed_date = parsed_date.replace(year=current_year)
+                else:
+                    # Try other common formats
+                    date_formats = ['%B %d', '%d %B', '%d/%m', '%m/%d']
+                    parsed_date = None
+                    
+                    for fmt in date_formats:
+                        try:
+                            parsed_date = datetime.strptime(date, fmt)
+                            parsed_date = parsed_date.replace(year=current_year)
+                            break
+                        except ValueError:
+                            continue
+                
+                if parsed_date is None:
+                    raise ValueError(f"Could not parse date: {date}")
+                
                 formatted_date = parsed_date.strftime('%Y-%m-%d')
             except ValueError as e:
                 print(f"Error parsing date in tool: {e}")
