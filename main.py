@@ -47,6 +47,7 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
         
         # Clean up the postcode - remove any special characters that might cause issues
         postcode = re.sub(r'[^A-Za-z0-9\s]', '', postcode).strip()
+        print(f"Cleaned postcode: {postcode}")
         
         # First try to get real data from the MCP server
         try:
@@ -58,16 +59,25 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                 'https://monty-mcp.onrender.com/check-availability',
                 json={'postcode': postcode},
                 headers={'Content-Type': 'application/json'},
-                timeout=20  # 20 second timeout
+                timeout=30  # Increase timeout to 30 seconds
             )
             
             print(f"Response status code: {response.status_code}")
+            
+            # Log full response for debugging
+            try:
+                response_content = response.text[:1000]  # Limit to first 1000 chars in case it's huge
+                print(f"Response content (first 1000 chars): {response_content}")
+            except:
+                print("Could not get response content for logging")
             
             if response.status_code == 200:
                 # Parse the response
                 data = response.json()
                 slots = data.get('available_slots', [])
                 total_slots = data.get('total_slots', 0)
+                
+                print(f"Got {total_slots} total slots from MCP server")
                 
                 if not slots:
                     return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
@@ -76,6 +86,9 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                 # Only show first 5 slots to keep response manageable
                 slot_list = []
                 for i, slot in enumerate(slots[:5], 1):
+                    # Log each slot for debugging
+                    print(f"Processing slot {i}: {slot}")
+                    
                     # Convert date format to readable format
                     date_obj = datetime.strptime(slot['date'], '%Y-%m-%d')
                     formatted_date = date_obj.strftime('%A, %B %d')
@@ -118,38 +131,42 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                 return message
             
             elif response.status_code == 400:
-                data = response.json()
-                error_message = data.get('message', "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking.")
-                return error_message
+                try:
+                    data = response.json()
+                    error_message = data.get('message', "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking.")
+                    print(f"Got 400 error message: {error_message}")
+                    return error_message
+                except Exception as json_err:
+                    print(f"Failed to parse 400 response as JSON: {json_err}")
+                    return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
             
             else:
-                # Fall back to hardcoded data for other status codes
-                raise Exception(f"Unexpected status code: {response.status_code}")
+                # Add more detailed error information instead of falling back to hardcoded data
+                error_message = f"The booking system returned an unexpected status code: {response.status_code}. Please call Lee on 01442 876131 to check availability."
+                print(f"Unexpected status code: {response.status_code}")
+                print(f"Returning error message: {error_message}")
+                return error_message
+            
+        except requests.exceptions.ReadTimeout:
+            print("Request to MCP server timed out")
+            return "I'm having trouble connecting to our booking system at the moment. This might be due to network issues. Please call Lee directly on 01442 876131 to check availability."
+            
+        except requests.exceptions.ConnectionError:
+            print("Connection error when connecting to MCP server")
+            return "I'm having trouble connecting to our booking system. Please call Lee directly on 01442 876131 to check availability."
             
         except Exception as e:
             print(f"Error connecting to MCP server: {e}")
-            print("Falling back to hardcoded response")
-            
-            # Return a hardcoded response as fallback
-            message = """I found these tuning slots:
-
-1. Tuesday, April 15 at 10:30 am
-2. Tuesday, April 15 at 12:00 pm
-3. Tuesday, April 15 at 1:30 pm
-4. Wednesday, April 16 at 9:00 am
-5. Wednesday, April 16 at 10:30 am
-
-These are examples of our typical available slots. Would any of these days/times work for you? Or please call Lee on 01442 876131 to check specific availability."""
-            
-            print("Returning hardcoded response due to MCP server error")
-            print("==================================================\n")
-            return message
+            print(f"Error type: {type(e).__name__}")
+            # Return a clear error message instead of hardcoded response
+            return f"I'm experiencing a technical issue connecting to our booking system. Please call Lee on 01442 876131 to check availability. (Error: {type(e).__name__})"
             
     except Exception as e:
         print(f"Error in check_piano_tuning_availability: {e}")
+        print(f"Error type: {type(e).__name__}")
         print("==================================================\n")
         
-        # Ultimate fallback
+        # Return clear error message
         return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
 @function_tool
@@ -210,60 +227,79 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
     print(f"Phone: {phone}")
     
     try:
-        # Check if the address contains a postcode
+        # Extract postcode from address for validation
         postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', address, re.IGNORECASE)
         if not postcode_match:
             return "I need a valid UK postcode in your address to book the appointment. Please provide your complete address including postcode."
         
+        extracted_postcode = postcode_match.group().strip()
+        print(f"Extracted postcode: {extracted_postcode}")
+        
+        # First, check if this time slot is actually available for this postcode
+        # This prevents booking already-booked slots
+        try:
+            print("Validating slot availability before booking...")
+            
+            # Clean up the postcode
+            cleaned_postcode = re.sub(r'[^A-Za-z0-9\s]', '', extracted_postcode).strip()
+            
+            # Check availability
+            avail_response = requests.post(
+                'https://monty-mcp.onrender.com/check-availability',
+                json={'postcode': cleaned_postcode},
+                headers={'Content-Type': 'application/json'},
+                timeout=20
+            )
+            
+            print(f"Availability check response status: {avail_response.status_code}")
+            
+            # Process the formatted time to check against available slots
+            # Normalize the time for comparison
+            booking_time = None
+            try:
+                booking_time = format_time_for_booking(time)
+                print(f"Normalized time for availability check: {booking_time}")
+            except:
+                print("Could not normalize time for availability check")
+            
+            # Process the formatted date for comparison
+            formatted_date = None
+            try:
+                formatted_date = format_date_for_booking(date)
+                print(f"Normalized date for availability check: {formatted_date}")
+            except:
+                print("Could not normalize date for availability check")
+            
+            # If we got a successful response, verify the slot is available
+            if avail_response.status_code == 200 and booking_time and formatted_date:
+                data = avail_response.json()
+                available_slots = data.get('available_slots', [])
+                
+                # Check if the requested slot exists in available slots
+                slot_is_available = False
+                for slot in available_slots:
+                    if (slot.get('date') == formatted_date and 
+                        slot.get('time') == booking_time):
+                        slot_is_available = True
+                        print(f"Found matching slot: date={slot['date']}, time={slot['time']}")
+                        break
+                
+                if not slot_is_available:
+                    print(f"Requested slot {formatted_date} at {booking_time} is not available")
+                    return f"I'm sorry, but the slot on {date} at {time} is not available. Please select a different time from the available options."
+                
+                print(f"Slot validated as available: {formatted_date} at {booking_time}")
+            else:
+                # If we couldn't verify, continue with the booking anyway
+                print("Could not verify slot availability, proceeding with booking attempt")
+        
+        except Exception as verify_err:
+            print(f"Error validating slot availability: {verify_err}")
+            # Continue with booking even if verification fails
+        
         # Format the date properly if needed
         try:
-            # Handle different date formats
-            if isinstance(date, str):
-                # Handle common formats
-                if re.match(r'\d{4}-\d{2}-\d{2}', date):  # YYYY-MM-DD
-                    formatted_date = date
-                elif "," in date:  # "Tuesday, April 15"
-                    # Extract day and month
-                    match = re.search(r'([A-Za-z]+),\s+([A-Za-z]+)\s+(\d+)', date)
-                    if match:
-                        month_name = match.group(2)
-                        day = int(match.group(3))
-                        month_num = {
-                            'January': 1, 'February': 2, 'March': 3, 'April': 4,
-                            'May': 5, 'June': 6, 'July': 7, 'August': 8,
-                            'September': 9, 'October': 10, 'November': 11, 'December': 12
-                        }.get(month_name, 1)
-                        year = datetime.now().year  # Use current year
-                        # If month/day is earlier than current date, use next year
-                        current_date = datetime.now()
-                        if (month_num < current_date.month or 
-                            (month_num == current_date.month and day < current_date.day)):
-                            year += 1
-                        formatted_date = f"{year}-{month_num:02d}-{day:02d}"
-                    else:
-                        return "I couldn't understand the date format. Please provide it as shown in the available slots."
-                else:
-                    # Try to extract date from other formats
-                    date_match = re.search(r'(\d{1,2})(st|nd|rd|th)?\s+(?:of\s+)?([A-Za-z]+)', date, re.IGNORECASE)
-                    if date_match:
-                        day = int(date_match.group(1))
-                        month_name = date_match.group(3).capitalize()
-                        month_num = {
-                            'January': 1, 'February': 2, 'March': 3, 'April': 4,
-                            'May': 5, 'June': 6, 'July': 7, 'August': 8,
-                            'September': 9, 'October': 10, 'November': 11, 'December': 12
-                        }.get(month_name, 1)
-                        year = datetime.now().year  # Use current year
-                        # If month/day is earlier than current date, use next year
-                        current_date = datetime.now()
-                        if (month_num < current_date.month or 
-                            (month_num == current_date.month and day < current_date.day)):
-                            year += 1
-                        formatted_date = f"{year}-{month_num:02d}-{day:02d}"
-                    else:
-                        return "I couldn't understand the date format. Please provide it as shown in the available slots."
-            else:
-                return "I need a valid date to book the appointment."
+            formatted_date = format_date_for_booking(date)
         except Exception as date_err:
             print(f"Error formatting date: {date_err}")
             return "I couldn't understand the date format. Please provide it as shown in the available slots."
@@ -272,118 +308,8 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         try:
             # Save the original time for display
             original_time = time
-            
-            # First, standardize the time format by converting various inputs to 24-hour HH:MM format
-            print(f"Processing time: {time}")
-            
-            # Remove any extraneous spaces or characters
-            time = time.strip().lower()
-            
-            # Standardize formats with spaces, e.g., "9 am" -> "9am"
-            time = re.sub(r'(\d+)\s+(am|pm)', r'\1\2', time)
-            
-            # Try multiple regex patterns to catch different time formats
-            # Format: 24-hour time (13:30, 9:30)
-            if re.match(r'^(\d{1,2}):(\d{2})$', time):
-                match = re.match(r'^(\d{1,2}):(\d{2})$', time)
-                hour = int(match.group(1))
-                minute = int(match.group(2))
-                normalized_time = f"{hour:02d}:{minute:02d}"
-                print(f"Matched 24-hour time format: {normalized_time}")
-            
-            # Format: 12-hour time with am/pm (9:30am, 9:30 am, 9:30pm, 9:30 pm)
-            elif re.match(r'^(\d{1,2}):(\d{2})\s*(am|pm)$', time):
-                match = re.match(r'^(\d{1,2}):(\d{2})\s*(am|pm)$', time)
-                hour = int(match.group(1))
-                minute = int(match.group(2))
-                ampm = match.group(3).lower()
-                
-                if ampm == 'pm' and hour < 12:
-                    hour += 12
-                elif ampm == 'am' and hour == 12:
-                    hour = 0
-                
-                normalized_time = f"{hour:02d}:{minute:02d}"
-                print(f"Matched 12-hour time with minutes: {normalized_time}")
-            
-            # Format: Hour only with am/pm (9am, 9pm)
-            elif re.match(r'^(\d{1,2})\s*(am|pm)$', time):
-                match = re.match(r'^(\d{1,2})\s*(am|pm)$', time)
-                hour = int(match.group(1))
-                ampm = match.group(2).lower()
-                
-                if ampm == 'pm' and hour < 12:
-                    hour += 12
-                elif ampm == 'am' and hour == 12:
-                    hour = 0
-                
-                normalized_time = f"{hour:02d}:00"
-                print(f"Matched hour-only with am/pm: {normalized_time}")
-            
-            # Format: Hour only (9, 13)
-            elif re.match(r'^(\d{1,2})$', time):
-                hour = int(time)
-                # Assume hour less than 12 without am/pm is in the morning
-                normalized_time = f"{hour:02d}:00"
-                print(f"Matched hour-only: {normalized_time}")
-                
-            # Format: o'clock variants
-            elif "o'clock" in time or "oclock" in time:
-                match = re.search(r'(\d{1,2})', time)
-                if match:
-                    hour = int(match.group(1))
-                    # Check if there's am/pm
-                    if "pm" in time and hour < 12:
-                        hour += 12
-                    elif "am" in time and hour == 12:
-                        hour = 0
-                    normalized_time = f"{hour:02d}:00"
-                    print(f"Matched o'clock format: {normalized_time}")
-                else:
-                    raise ValueError("Couldn't extract hour from o'clock format")
-            
-            # Natural language time
-            elif any(word in time for word in ["morning", "afternoon", "evening"]):
-                if "morning" in time:
-                    if "early" in time:
-                        normalized_time = "09:00"
-                    else:
-                        normalized_time = "10:00"
-                elif "afternoon" in time:
-                    if "early" in time:
-                        normalized_time = "13:00"
-                    else:
-                        normalized_time = "14:00"
-                elif "evening" in time:
-                    normalized_time = "17:00"
-                print(f"Matched natural language time: {normalized_time}")
-            
-            # If all else fails, try a more general regex to extract hours and minutes
-            else:
-                match = re.search(r'(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?', time)
-                if match:
-                    hour = int(match.group(1))
-                    minute = int(match.group(2)) if match.group(2) else 0
-                    ampm = match.group(3).lower() if match.group(3) else None
-                    
-                    if ampm == 'pm' and hour < 12:
-                        hour += 12
-                    elif ampm == 'am' and hour == 12:
-                        hour = 0
-                    
-                    normalized_time = f"{hour:02d}:{minute:02d}"
-                    print(f"Matched using general regex: {normalized_time}")
-                else:
-                    # Last resort - set a default time
-                    normalized_time = "10:00"
-                    print(f"No format matched, using default: {normalized_time}")
-            
-            # At this point we have a normalized time string in 24-hour format (HH:MM)
-            # Use this time for the booking, not a mapped standard time
-            # Ensure we're using the EXACT time requested to fix the time mismatch issue
-            booking_time = normalized_time
+            booking_time = format_time_for_booking(time)
             print(f"Final booking time: {booking_time}")
-            
         except Exception as time_err:
             print(f"Error formatting time: {time_err}")
             # Use the original time as fallback
@@ -432,7 +358,7 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 
         except Exception as req_err:
             print(f"Error connecting to MCP server for booking: {req_err}")
-            # Fall back to a generic success message
+            # Fall back to a generic message
             return f"Due to a technical issue, I couldn't confirm your booking with our system. Please call Lee on 01442 876131 to confirm your appointment for {date} at {original_time}."
             
     except Exception as e:
@@ -440,6 +366,144 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         print("==================================================\n")
         # Ultimate fallback
         return "I apologize, but I encountered an error while trying to book your appointment. Please call Lee directly on 01442 876131 to book your piano tuning."
+
+def format_date_for_booking(date: str) -> str:
+    """Format a date string into YYYY-MM-DD format for booking."""
+    if isinstance(date, str):
+        # Already in YYYY-MM-DD format
+        if re.match(r'\d{4}-\d{2}-\d{2}', date):
+            return date
+            
+        # Format: "Tuesday, April 15"
+        elif "," in date:
+            match = re.search(r'([A-Za-z]+),\s+([A-Za-z]+)\s+(\d+)', date)
+            if match:
+                month_name = match.group(2)
+                day = int(match.group(3))
+                month_num = {
+                    'January': 1, 'February': 2, 'March': 3, 'April': 4,
+                    'May': 5, 'June': 6, 'July': 7, 'August': 8,
+                    'September': 9, 'October': 10, 'November': 11, 'December': 12
+                }.get(month_name, 1)
+                year = datetime.now().year  # Use current year
+                # If month/day is earlier than current date, use next year
+                current_date = datetime.now()
+                if (month_num < current_date.month or 
+                    (month_num == current_date.month and day < current_date.day)):
+                    year += 1
+                return f"{year}-{month_num:02d}-{day:02d}"
+                
+        # Format: "15th of April" or "15 April"
+        else:
+            date_match = re.search(r'(\d{1,2})(st|nd|rd|th)?\s+(?:of\s+)?([A-Za-z]+)', date, re.IGNORECASE)
+            if date_match:
+                day = int(date_match.group(1))
+                month_name = date_match.group(3).capitalize()
+                month_num = {
+                    'January': 1, 'February': 2, 'March': 3, 'April': 4,
+                    'May': 5, 'June': 6, 'July': 7, 'August': 8,
+                    'September': 9, 'October': 10, 'November': 11, 'December': 12
+                }.get(month_name, 1)
+                year = datetime.now().year  # Use current year
+                # If month/day is earlier than current date, use next year
+                current_date = datetime.now()
+                if (month_num < current_date.month or 
+                    (month_num == current_date.month and day < current_date.day)):
+                    year += 1
+                return f"{year}-{month_num:02d}-{day:02d}"
+                
+    raise ValueError("Could not format date for booking")
+
+def format_time_for_booking(time: str) -> str:
+    """Format a time string into HH:MM format for booking."""
+    # Remove any extraneous spaces or characters
+    time = time.strip().lower()
+    
+    # Standardize formats with spaces, e.g., "9 am" -> "9am"
+    time = re.sub(r'(\d+)\s+(am|pm)', r'\1\2', time)
+    
+    # Format: 24-hour time (13:30, 9:30)
+    if re.match(r'^(\d{1,2}):(\d{2})$', time):
+        match = re.match(r'^(\d{1,2}):(\d{2})$', time)
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        return f"{hour:02d}:{minute:02d}"
+    
+    # Format: 12-hour time with am/pm (9:30am, 9:30 am, 9:30pm, 9:30 pm)
+    elif re.match(r'^(\d{1,2}):(\d{2})\s*(am|pm)$', time):
+        match = re.match(r'^(\d{1,2}):(\d{2})\s*(am|pm)$', time)
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        ampm = match.group(3).lower()
+        
+        if ampm == 'pm' and hour < 12:
+            hour += 12
+        elif ampm == 'am' and hour == 12:
+            hour = 0
+        
+        return f"{hour:02d}:{minute:02d}"
+    
+    # Format: Hour only with am/pm (9am, 9pm)
+    elif re.match(r'^(\d{1,2})\s*(am|pm)$', time):
+        match = re.match(r'^(\d{1,2})\s*(am|pm)$', time)
+        hour = int(match.group(1))
+        ampm = match.group(2).lower()
+        
+        if ampm == 'pm' and hour < 12:
+            hour += 12
+        elif ampm == 'am' and hour == 12:
+            hour = 0
+        
+        return f"{hour:02d}:00"
+    
+    # Format: Hour only (9, 13)
+    elif re.match(r'^(\d{1,2})$', time):
+        hour = int(time)
+        return f"{hour:02d}:00"
+    
+    # Format: o'clock variants
+    elif "o'clock" in time or "oclock" in time:
+        match = re.search(r'(\d{1,2})', time)
+        if match:
+            hour = int(match.group(1))
+            # Check if there's am/pm
+            if "pm" in time and hour < 12:
+                hour += 12
+            elif "am" in time and hour == 12:
+                hour = 0
+            return f"{hour:02d}:00"
+        
+    # Natural language time
+    elif any(word in time for word in ["morning", "afternoon", "evening"]):
+        if "morning" in time:
+            if "early" in time:
+                return "09:00"
+            else:
+                return "10:00"
+        elif "afternoon" in time:
+            if "early" in time:
+                return "13:00"
+            else:
+                return "14:00"
+        elif "evening" in time:
+            return "17:00"
+    
+    # If all else fails, try a more general regex to extract hours and minutes
+    else:
+        match = re.search(r'(\d{1,2})(?::(\d{2}))?(?:\s*(am|pm))?', time)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            ampm = match.group(3).lower() if match.group(3) else None
+            
+            if ampm == 'pm' and hour < 12:
+                hour += 12
+            elif ampm == 'am' and hour == 12:
+                hour = 0
+            
+            return f"{hour:02d}:{minute:02d}"
+    
+    raise ValueError("Could not format time for booking")
 
 class VoiceSettings:
     def __init__(self, model: str, voice: str, instructions: str, provider: str = "openai", voice_id: str = None):
@@ -739,6 +803,18 @@ def ask():
                 postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
                 if postcode_match:
                     postcode = postcode_match.group()
+                    
+                    # Initialize or get history
+                    if session_id not in conversation_history:
+                        conversation_history[session_id] = {
+                            'last_agent': agent_monty,
+                            'conversation': [],
+                            'last_postcode': postcode  # Store postcode for later use
+                        }
+                    else:
+                        # Update the postcode in the session
+                        conversation_history[session_id]['last_postcode'] = postcode
+                    
                     # Call our function directly
                     response_text = check_piano_tuning_availability_direct(postcode)
                     
