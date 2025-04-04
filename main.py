@@ -43,25 +43,92 @@ def check_piano_tuning_availability(postcode: str) -> str:
     """Check available piano tuning slots."""
     try:
         print(f"\n==================================================")
-        print(f"Checking availability for hardcoded postcode: {postcode}")
+        print(f"Checking availability for postcode: {postcode}")
         
-        # Return a hardcoded response to avoid API calls
-        message = """I found these tuning slots:
+        # Clean up the postcode - remove any special characters that might cause issues
+        postcode = re.sub(r'[^A-Za-z0-9\s]', '', postcode).strip()
+        
+        # First try to get real data from the MCP server
+        try:
+            # Make request to the MCP server
+            print(f"Making request to MCP server: https://monty-mcp.onrender.com/check-availability")
+            print(f"Request payload: {{'postcode': '{postcode}'}}")
+            
+            response = requests.post(
+                'https://monty-mcp.onrender.com/check-availability',
+                json={'postcode': postcode},
+                headers={'Content-Type': 'application/json'},
+                timeout=20  # 20 second timeout
+            )
+            
+            print(f"Response status code: {response.status_code}")
+            
+            if response.status_code == 200:
+                # Parse the response
+                data = response.json()
+                slots = data.get('available_slots', [])
+                total_slots = data.get('total_slots', 0)
+                
+                if not slots:
+                    return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
+                
+                # Format the slots into a readable message
+                # Only show first 5 slots to keep response manageable
+                slot_list = []
+                for i, slot in enumerate(slots[:5], 1):
+                    date_obj = datetime.strptime(slot['date'], '%Y-%m-%d')
+                    formatted_date = date_obj.strftime('%A, %B %d')
+                    slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
+                
+                # Add a note if we're only showing a subset of slots
+                additional_info = ""
+                if total_slots > 5:
+                    additional_info = f"\n\n(Showing 5 of {total_slots} available slots)"
+                
+                message = (
+                    f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
+                    "\n".join(slot_list) +
+                    additional_info +
+                    "\n\nWould any of these times work for you? If not, I can suggest more options."
+                )
+                
+                print("Successfully retrieved and processed slots from MCP server")
+                print("==================================================\n")
+                return message
+            
+            elif response.status_code == 400:
+                data = response.json()
+                error_message = data.get('message', "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking.")
+                return error_message
+            
+            else:
+                # Fall back to hardcoded data for other status codes
+                raise Exception(f"Unexpected status code: {response.status_code}")
+            
+        except Exception as e:
+            print(f"Error connecting to MCP server: {e}")
+            print("Falling back to hardcoded response")
+            
+            # Return a hardcoded response as fallback
+            message = """I found these tuning slots:
 
 1. Tuesday, April 15 at 10:30
 2. Tuesday, April 15 at 12:00 
 3. Tuesday, April 15 at 13:30
+4. Wednesday, April 16 at 09:00
+5. Wednesday, April 16 at 10:30
 
-These are just 3 of 29 available slots. Would any work for you?"""
-        
-        print("Successfully generated hardcoded response message")
-        print("==================================================\n")
-        return message
+These are examples of our typical available slots. Would any of these days/times work for you? Or please call Lee on 01442 876131 to check specific availability."""
+            
+            print("Returning hardcoded response due to MCP server error")
+            print("==================================================\n")
+            return message
             
     except Exception as e:
-        print(f"Error in hardcoded availability function: {e}")
+        print(f"Error in check_piano_tuning_availability: {e}")
         print("==================================================\n")
         
+        # Ultimate fallback
         return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
 def handle_piano_tuning_request(user_input: str) -> str:
@@ -108,17 +175,99 @@ def process_message(message: str, context: dict = None) -> str:
 def book_piano_tuning(date: str, time: str, customer_name: str, address: str, phone: str) -> str:
     """Book a piano tuning appointment. Returns a confirmation or error message."""
     print(f"\n==================================================")
-    print(f"book_piano_tuning tool called with hardcoded response")
+    print(f"book_piano_tuning tool called with real server")
     print(f"Date: {date}")
     print(f"Time: {time}")
     print(f"Customer: {customer_name}")
+    print(f"Address: {address}")
+    print(f"Phone: {phone}")
     
-    # Return a hardcoded success message
-    message = f"Your piano tuning appointment is all set for {date} at {time}. We've got you down as {customer_name} at {address}. We'll give you a call on {phone} to confirm the day before. Thanks for booking with Montague Pianos!"
-    
-    print("Returning hardcoded success message")
-    print("==================================================\n")
-    return message
+    try:
+        # Check if the address contains a postcode
+        postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', address, re.IGNORECASE)
+        if not postcode_match:
+            return "I need a valid UK postcode in your address to book the appointment. Please provide your complete address including postcode."
+        
+        # Format the date properly if needed
+        try:
+            # Handle different date formats
+            if isinstance(date, str):
+                # Handle common formats
+                if re.match(r'\d{4}-\d{2}-\d{2}', date):  # YYYY-MM-DD
+                    formatted_date = date
+                elif "," in date:  # "Tuesday, April 15"
+                    # Extract day and month
+                    match = re.search(r'([A-Za-z]+),\s+([A-Za-z]+)\s+(\d+)', date)
+                    if match:
+                        month_name = match.group(2)
+                        day = int(match.group(3))
+                        month_num = {
+                            'January': 1, 'February': 2, 'March': 3, 'April': 4,
+                            'May': 5, 'June': 6, 'July': 7, 'August': 8,
+                            'September': 9, 'October': 10, 'November': 11, 'December': 12
+                        }.get(month_name, 1)
+                        year = 2025  # Use a fixed year for now
+                        formatted_date = f"{year}-{month_num:02d}-{day:02d}"
+                    else:
+                        return "I couldn't understand the date format. Please provide it as shown in the available slots."
+                else:
+                    return "I couldn't understand the date format. Please provide it as shown in the available slots."
+            else:
+                return "I need a valid date to book the appointment."
+        except Exception as date_err:
+            print(f"Error formatting date: {date_err}")
+            return "I couldn't understand the date format. Please provide it as shown in the available slots."
+        
+        # Try to book with the real MCP server
+        try:
+            print(f"Making booking request to MCP server: https://monty-mcp.onrender.com/create-booking")
+            print(f"Request payload: date={formatted_date}, time={time}, customer={customer_name}")
+            
+            response = requests.post(
+                'https://monty-mcp.onrender.com/create-booking',
+                json={
+                    'date': formatted_date,
+                    'time': time,
+                    'customer_name': customer_name,
+                    'address': address,
+                    'phone': phone
+                },
+                headers={'Content-Type': 'application/json'},
+                timeout=20  # 20 second timeout
+            )
+            
+            print(f"Response status code: {response.status_code}")
+            
+            if response.status_code == 200:
+                # Parse the response
+                data = response.json()
+                message = data.get('message', f"Your piano tuning appointment is all set for {date} at {time}.")
+                print("Successfully booked with MCP server")
+                print("==================================================\n")
+                return message
+            else:
+                # Handle error response
+                try:
+                    data = response.json()
+                    error_message = data.get('error', f"Booking failed with status {response.status_code}. Please call Lee on 01442 876131.")
+                    print(f"Booking error: {error_message}")
+                    print("==================================================\n")
+                    return error_message
+                except:
+                    print(f"Error parsing booking response")
+                    print("==================================================\n")
+                    return f"Booking failed with status {response.status_code}. Please call Lee on 01442 876131."
+                
+        except Exception as req_err:
+            print(f"Error connecting to MCP server for booking: {req_err}")
+            # Fall back to a generic success message
+            return f"Due to a technical issue, I couldn't confirm your booking with our system. Please call Lee on 01442 876131 to confirm your appointment for {date} at {time}."
+            
+    except Exception as e:
+        print(f"Error in book_piano_tuning: {e}")
+        print("==================================================\n")
+        # Ultimate fallback
+        return "I apologize, but I encountered an error while trying to book your appointment. Please call Lee directly on 01442 876131 to book your piano tuning."
 
 class VoiceSettings:
     def __init__(self, model: str, voice: str, instructions: str, provider: str = "openai", voice_id: str = None):
@@ -405,42 +554,49 @@ def ask():
         
         print(f"Processing request for question: {question[:50]}...")
         
-        # DETECT POSTCODE IN QUESTION
+        # ONLY use hardcoded approach for direct postcode queries that look like booking requests
+        # This is a fallback in case the agent fails
         contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE) is not None
-        contains_tuning_keywords = re.search(r'(piano|tuning|tune|appointment|slot)', question, re.IGNORECASE) is not None
+        is_likely_tuning_query = re.search(r'\b(tuning|tune|tuner|appointment|slot|book)\b', question, re.IGNORECASE) is not None
+        is_just_postcode = len(question.strip()) < 12  # Likely just a postcode with minimal other text
         
-        # If it's a tuning request with postcode
-        if contains_postcode and contains_tuning_keywords:
-            # Extract the postcode
-            postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
-            if postcode_match:
-                # Hard-coded response for demo purposes
-                response_text = """I found these tuning slots:
-
-1. Tuesday, April 15 at 10:30
-2. Tuesday, April 15 at 12:00 
-3. Tuesday, April 15 at 13:30
-
-These are just 3 of 29 available slots. Would any work for you?"""
-                
-                return jsonify({
-                    'response': response_text,
-                    'agent': 'Monty Agent',
-                    'audio': None
-                })
+        if contains_postcode and (is_likely_tuning_query or is_just_postcode):
+            # There's a postcode and it's likely a tuning query
+            # Let's try to extract the postcode and pass it directly to our function
+            try:
+                postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
+                if postcode_match:
+                    postcode = postcode_match.group()
+                    # Call our function directly
+                    response_text = check_piano_tuning_availability(postcode)
+                    
+                    return jsonify({
+                        'response': response_text,
+                        'agent': 'Monty Agent',
+                        'audio': None
+                    })
+            except Exception as direct_err:
+                # If direct approach fails, we'll fall back to agent-based
+                print(f"Direct postcode handling failed: {direct_err}")
         
-        # Use a simplified approach for agent execution
+        # Use the agent-based approach for everything else
         try:
             # Initialize or get history
             if session_id not in conversation_history:
                 conversation_history[session_id] = {
-                    'last_agent': agent_monty,  # Default to Monty directly
+                    'last_agent': agent_monty,  # Default to Monty directly for simplicity
                     'conversation': []
                 }
             
             # Get agent and history
             agent = conversation_history[session_id]['last_agent']
             history = conversation_history[session_id]['conversation']
+            
+            # Clear history if it's getting too long (prevent token limit issues)
+            if len(history) > 20:
+                print("History getting long, truncating to last 10 messages")
+                history = history[-10:]
+                conversation_history[session_id]['conversation'] = history
             
             # Run the agent
             if history:
@@ -474,6 +630,9 @@ These are just 3 of 29 available slots. Would any work for you?"""
             
         except Exception as agent_err:
             print(f"Agent error: {agent_err}")
+            import traceback
+            print(traceback.format_exc())
+            
             # Fallback message
             return jsonify({
                 'response': "I apologize, but I encountered an error. Please try again or ask a different question.",
@@ -483,6 +642,9 @@ These are just 3 of 29 available slots. Would any work for you?"""
             
     except Exception as e:
         print(f"Global error: {e}")
+        import traceback
+        print(traceback.format_exc())
+        
         # Ultra-minimal fallback
         return jsonify({
             'response': "Sorry, I encountered an error. Please try again.",
