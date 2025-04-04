@@ -47,7 +47,7 @@ def check_piano_tuning_availability(postcode: str) -> str:
         
         print(f"Checking availability for postcode: {postcode}")
         response = requests.post(
-            '/check-availability',
+            'https://monty-mcp.onrender.com/check-availability',
             json={'postcode': postcode}
         )
         
@@ -153,7 +153,7 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         # Make request to booking server
         print("\nMaking request to booking server...")
         response = requests.post(
-            '/create-booking',
+            'https://monty-mcp.onrender.com/create-booking',
             json={
                 'date': formatted_date, 
                 'time': time,
@@ -628,59 +628,6 @@ def generate_audio():
         })
     except Exception as e:
         print(f"Error generating audio: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/check-availability', methods=['POST'])
-def check_availability():
-    """Check availability for piano tuning based on postcode."""
-    data = request.get_json()
-    postcode = data.get('postcode', '')
-    
-    try:
-        # Mock data for available slots
-        available_slots = [
-            {"date": "2024-05-15", "time": "10:00 AM"},
-            {"date": "2024-05-15", "time": "2:00 PM"},
-            {"date": "2024-05-16", "time": "11:00 AM"},
-            {"date": "2024-05-17", "time": "3:00 PM"},
-            {"date": "2024-05-20", "time": "10:00 AM"},
-            {"date": "2024-05-21", "time": "1:00 PM"}
-        ]
-        
-        return jsonify({
-            'available_slots': available_slots,
-            'total_slots': len(available_slots)
-        })
-    except Exception as e:
-        print(f"Error checking availability: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/create-booking', methods=['POST'])
-def create_booking():
-    """Create a piano tuning booking."""
-    data = request.get_json()
-    date = data.get('date', '')
-    time = data.get('time', '')
-    customer_name = data.get('customer_name', '')
-    address = data.get('address', '')
-    phone = data.get('phone', '')
-    
-    try:
-        # In a real application, you would save this to a database
-        print(f"Creating booking for {customer_name} on {date} at {time}")
-        print(f"Address: {address}")
-        print(f"Phone: {phone}")
-        
-        # Create a booking ID
-        booking_id = str(uuid.uuid4())[:8]
-        
-        return jsonify({
-            'success': True,
-            'booking_id': booking_id,
-            'message': f"Your piano tuning appointment is all set for {date} at {time}. We've got you down as {customer_name} at {address}. We'll give you a call on {phone} to confirm the day before. Thanks for booking with Montague Pianos!"
-        })
-    except Exception as e:
-        print(f"Error creating booking: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
