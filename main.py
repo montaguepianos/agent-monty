@@ -662,22 +662,35 @@ def ask():
             try:
                 result = asyncio.run(Runner.run(last_agent, input_list))
             except Exception as e:
+                print(f"Error running agent with conversation history: {e}")
                 if "not found" in str(e):
                     print("Invalid message reference – clearing history and retrying.")
                     conversation_history[session_id] = {
                         'last_agent': triage_agent,
                         'conversation': []
                     }
-                    result = asyncio.run(Runner.run(triage_agent, question))
+                    try:
+                        result = asyncio.run(Runner.run(triage_agent, question))
+                    except Exception as retry_err:
+                        print(f"Error on retry after clearing history: {retry_err}")
+                        raise retry_err
                 else:
                     raise e
             
             # If the last agent handed off to triage, ensure we use the appropriate specialist
             if result._last_agent == triage_agent and question:
-                result = asyncio.run(Runner.run(triage_agent, question))
+                try:
+                    result = asyncio.run(Runner.run(triage_agent, question))
+                except Exception as triage_err:
+                    print(f"Error running triage agent: {triage_err}")
+                    raise triage_err
         else:
             # For new questions, start with the triage agent
-            result = asyncio.run(Runner.run(triage_agent, question))
+            try:
+                result = asyncio.run(Runner.run(triage_agent, question))
+            except Exception as new_q_err:
+                print(f"Error running triage agent for new question: {new_q_err}")
+                raise new_q_err
         
         print(f"Agent response: {result.final_output}")
         final_message_text = result.final_output # Use agent's text response directly
@@ -754,7 +767,50 @@ def ask():
         print(f"Error type: {type(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        
+        # Check if postcode is in question and this might be a tuning request
+        contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
+        contains_tuning_keywords = re.search(r'(piano|tuning|tune|appointment)', question, re.IGNORECASE)
+        
+        if contains_postcode or contains_tuning_keywords:
+            # Provide fallback response with mock data
+            mock_slots = [
+                {"date": "2025-04-15", "time": "10:30"},
+                {"date": "2025-04-15", "time": "13:30"},
+                {"date": "2025-04-16", "time": "09:00"},
+                {"date": "2025-04-16", "time": "10:30"},
+                {"date": "2025-04-17", "time": "12:00"},
+                {"date": "2025-04-17", "time": "15:00"}
+            ]
+            
+            slot_list = []
+            for i, slot in enumerate(mock_slots, 1):
+                try:
+                    date = datetime.strptime(slot['date'], '%Y-%m-%d')
+                    formatted_date = date.strftime('%A, %B %d')
+                    slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
+                except Exception:
+                    slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
+            
+            mock_response = (
+                f"I'm having some technical difficulties connecting to our booking system, " 
+                f"but here are some typically available slots:\n\n" +
+                "\n".join(slot_list) +
+                "\n\nWould any of these times work for you? If so, please call Lee on 01442 876131 to confirm your booking."
+            )
+            
+            return jsonify({
+                'response': mock_response,
+                'agent': 'Monty Agent',
+                'audio': None
+            })
+        else:
+            # Generic error for non-tuning requests
+            return jsonify({
+                'response': "I'm sorry, I encountered a temporary technical issue. Could you please try again or rephrase your question?",
+                'agent': 'Monty Agent',
+                'audio': None
+            }), 500
 
 @app.route('/generate-audio', methods=['POST'])
 def generate_audio():
