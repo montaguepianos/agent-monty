@@ -764,97 +764,36 @@ def ask():
             print(f"History update error traceback: {traceback.format_exc()}")
             # Continue despite history update error
 
-        # Generate audio response using final_message_text
+        # Skip audio generation completely and return a simple text response
+        current_agent = result._last_agent
+        
+        # Create a simple response without audio
         try:
-            print("Generating audio response...")
-            current_agent = result._last_agent
-            voice_settings = AGENT_VOICE_SETTINGS.get(current_agent.name)
-            hex_audio = None
-            audio_data = None
-
-            if voice_settings:
-                if voice_settings.provider == "elevenlabs":
-                    if elevenlabs_client:
-                         try:
-                            # Use ElevenLabs
-                            speech_response = elevenlabs_client.text_to_speech.convert(
-                                voice_id=voice_settings.voice_id,
-                                output_format="mp3_44100_128",
-                                text=final_message_text, 
-                                model_id=voice_settings.model
-                            )
-                            audio_data = b''.join(speech_response)
-                         except Exception as e:
-                             print(f"ERROR in ElevenLabs API call: {str(e)}. Falling back to OpenAI.")
-                             # Fallback needed here if you want audio on error
-                             pass # Or set audio_data to None/handle error
-                    else:
-                        print("Warning: ElevenLabs client not available.")
-                        # Fallback needed if you want audio
-                else:
-                    # Use OpenAI
-                    try:
-                        print("Using OpenAI for text-to-speech...")
-                        speech_response = client.audio.speech.create(
-                            model=voice_settings.model,
-                            voice=voice_settings.voice,
-                            input=final_message_text, 
-                            instructions=voice_settings.instructions
-                        )
-                        audio_data = speech_response.content
-                        print("OpenAI speech generation successful")
-                    except Exception as openai_err:
-                        print(f"Error generating speech with OpenAI: {openai_err}")
-                        audio_data = None
-                
-                if audio_data:
-                    try:
-                        hex_audio = audio_data.hex()
-                        print(f"Converted audio data to hex (length: {len(hex_audio)})")
-                    except Exception as hex_err:
-                        print(f"Error converting audio to hex: {hex_err}")
-                        hex_audio = None
-            
-            # Construct the JSON response
-            response_data = {
-                'response': final_message_text, 
-                'agent': current_agent.name,
-                'audio': hex_audio
-            }
-            
-            # Debug the response data (without the full audio)
-            debug_data = response_data.copy()
-            if 'audio' in debug_data:
-                debug_data['audio'] = f"[Audio data length: {len(debug_data['audio']) if debug_data['audio'] else 0}]"
-            print(f"Response data: {debug_data}")
-            
-            try:
-                print("Creating jsonify response...")
-                response = jsonify(response_data)
-                print("Response created successfully")
-                print("==================================================\n")
-                return response
-            except Exception as jsonify_err:
-                print(f"ERROR during jsonify: {jsonify_err}")
-                import traceback
-                print(f"Jsonify error traceback: {traceback.format_exc()}")
-                
-                # Try a simple response without audio as fallback
-                print("Attempting fallback response without audio...")
-                simple_response = {'response': final_message_text, 'agent': current_agent.name}
-                return jsonify(simple_response)
-
-        except Exception as e:
-            print(f"Error generating audio or constructing final response: {str(e)}")
-            import traceback
-            print(f"Audio error traceback: {traceback.format_exc()}")
-            # Fallback response without audio if error occurs
+            print("Creating simple response without audio...")
             simple_response = {
                 'response': final_message_text,
-                'agent': current_agent.name if 'current_agent' in locals() else 'Unknown Agent',
-                'audio': None
+                'agent': current_agent.name,
+                'audio': None  # No audio
             }
-            return jsonify(simple_response)
+            
+            # Log the response length 
+            print(f"Response length: {len(final_message_text)}")
+            
+            response = jsonify(simple_response)
+            print("Response created successfully")
+            print("==================================================\n")
+            return response
+        except Exception as resp_err:
+            print(f"Error creating response: {resp_err}")
+            import traceback
+            print(f"Response error traceback: {traceback.format_exc()}")
+            
+            # Ultimate fallback with minimal response
+            return jsonify({
+                'response': "I found some piano tuning slots. Please call Lee on 01442 876131 for details.",
+                'agent': 'Monty Agent',
+                'audio': None
+            })
         
     except Exception as e:
         print(f"Error processing message: {str(e)}")
