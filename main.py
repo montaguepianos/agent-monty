@@ -48,11 +48,11 @@ def check_piano_tuning_availability(postcode: str) -> str:
         print(f"Checking availability for postcode: {postcode}")
         try:
             # Detailed logging for request
-            print(f"Making request to: /proxy/check-availability (local proxy endpoint)")
+            print(f"Making request to: https://monty-mcp.onrender.com/check-availability")
             print(f"Request payload: {{'postcode': '{postcode}'}}")
             
             response = requests.post(
-                '/proxy/check-availability',
+                'https://monty-mcp.onrender.com/check-availability',
                 json={'postcode': postcode},
                 timeout=30  # Add a longer timeout
             )
@@ -189,12 +189,12 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         
         # Make request to booking server
         print("\nMaking request to booking server...")
-        print(f"URL: /proxy/create-booking (local proxy endpoint)")
+        print(f"URL: https://monty-mcp.onrender.com/create-booking")
         print(f"Request payload: {{'date': '{formatted_date}', 'time': '{time}', 'customer_name': '{customer_name}', 'address': '{address}', 'phone': '{phone}'}}")
         
         try:
             response = requests.post(
-                '/proxy/create-booking',
+                'https://monty-mcp.onrender.com/create-booking',
                 json={
                     'date': formatted_date, 
                     'time': time,
@@ -685,70 +685,6 @@ def generate_audio():
         })
     except Exception as e:
         print(f"Error generating audio: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/proxy/check-availability', methods=['POST'])
-def proxy_check_availability():
-    """Proxy endpoint to forward check-availability requests to the MCP server."""
-    try:
-        # Get the JSON data from the request
-        data = request.get_json()
-        print(f"Proxying check-availability request with data: {data}")
-        
-        # Forward the request to the MCP server
-        response = requests.post(
-            'https://monty-mcp.onrender.com/check-availability',
-            json=data,
-            headers={
-                'Content-Type': 'application/json'
-            },
-            timeout=30
-        )
-        
-        print(f"Proxy received response: Status {response.status_code}")
-        
-        # Return the response from the MCP server
-        return Response(
-            response.content,
-            status=response.status_code,
-            content_type=response.headers.get('Content-Type', 'application/json')
-        )
-    except Exception as e:
-        print(f"Error in proxy check-availability: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/proxy/create-booking', methods=['POST'])
-def proxy_create_booking():
-    """Proxy endpoint to forward create-booking requests to the MCP server."""
-    try:
-        # Get the JSON data from the request
-        data = request.get_json()
-        print(f"Proxying create-booking request with data: {data}")
-        
-        # Forward the request to the MCP server
-        response = requests.post(
-            'https://monty-mcp.onrender.com/create-booking',
-            json=data,
-            headers={
-                'Content-Type': 'application/json'
-            },
-            timeout=30
-        )
-        
-        print(f"Proxy received response: Status {response.status_code}")
-        
-        # Return the response from the MCP server
-        return Response(
-            response.content,
-            status=response.status_code,
-            content_type=response.headers.get('Content-Type', 'application/json')
-        )
-    except Exception as e:
-        print(f"Error in proxy create-booking: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
