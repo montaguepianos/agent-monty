@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Sending message to server...');
             try {
-                const response = await fetch('https://monty-mcp.onrender.com/ask', {
+                const response = await fetch('/ask', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
