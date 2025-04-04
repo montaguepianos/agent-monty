@@ -56,11 +56,24 @@ def check_piano_tuning_availability(postcode: str) -> str:
                 print(f"Making request to: https://monty-mcp.onrender.com/check-availability")
                 print(f"Request payload: {{'postcode': '{postcode}'}}")
                 
-                response = requests.post(
+                # Create a requests session to control exactly how the request is made
+                session = requests.Session()
+                
+                # Explicitly set the method to POST
+                req = requests.Request(
+                    'POST',
                     'https://monty-mcp.onrender.com/check-availability',
                     json={'postcode': postcode},
-                    timeout=timeout  # Increasing timeout
+                    headers={'Content-Type': 'application/json'}
                 )
+                prepared_req = session.prepare_request(req)
+                
+                # Log the prepared request for debugging
+                print(f"Request method: {prepared_req.method}")
+                print(f"Request headers: {prepared_req.headers}")
+                
+                # Make the request with the session
+                response = session.send(prepared_req, timeout=timeout)
                 
                 print(f"Response status code: {response.status_code}")
                 print(f"Response headers: {response.headers}")
@@ -243,7 +256,12 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
             print(f"Request payload: {{'date': '{formatted_date}', 'time': '{time}', 'customer_name': '{customer_name}', 'address': '{address}', 'phone': '{phone}'}}")
             
             try:
-                response = requests.post(
+                # Create a requests session to control exactly how the request is made
+                session = requests.Session()
+                
+                # Explicitly set the method to POST
+                req = requests.Request(
+                    'POST',
                     'https://monty-mcp.onrender.com/create-booking',
                     json={
                         'date': formatted_date, 
@@ -252,9 +270,16 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                         'address': address,
                         'phone': phone
                     },
-                    headers={'Content-Type': 'application/json'},
-                    timeout=timeout
+                    headers={'Content-Type': 'application/json'}
                 )
+                prepared_req = session.prepare_request(req)
+                
+                # Log the prepared request for debugging
+                print(f"Request method: {prepared_req.method}")
+                print(f"Request headers: {prepared_req.headers}")
+                
+                # Make the request with the session
+                response = session.send(prepared_req, timeout=timeout)
                 
                 print(f"Response status code: {response.status_code}")
                 print(f"Response headers: {response.headers}")
@@ -616,9 +641,15 @@ def ask():
         if conversation:
             input_list = conversation + [{"role": "user", "content": question}]
             try:
+                print(f"Running agent with input: {input_list[-1]}")
                 result = asyncio.run(Runner.run(last_agent, input_list))
+                print(f"Agent run completed successfully")
             except Exception as e:
                 print(f"Error running agent with conversation history: {e}")
+                print(f"Agent error type: {type(e).__name__}")
+                import traceback
+                print(f"Agent error traceback: {traceback.format_exc()}")
+                
                 if "not found" in str(e):
                     print("Invalid message reference – clearing history and retrying.")
                     conversation_history[session_id] = {
@@ -629,6 +660,7 @@ def ask():
                         result = asyncio.run(Runner.run(triage_agent, question))
                     except Exception as retry_err:
                         print(f"Error on retry after clearing history: {retry_err}")
+                        print(f"Retry error traceback: {traceback.format_exc()}")
                         raise retry_err
                 else:
                     raise e
