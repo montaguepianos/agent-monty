@@ -47,16 +47,6 @@ def check_piano_tuning_availability(postcode: str) -> str:
         
         print(f"Checking availability for postcode: {postcode}")
         
-        # Mock data for testing in case of server issues
-        mock_slots = [
-            {"date": "2025-04-15", "time": "10:30"},
-            {"date": "2025-04-15", "time": "13:30"},
-            {"date": "2025-04-16", "time": "09:00"},
-            {"date": "2025-04-16", "time": "10:30"},
-            {"date": "2025-04-17", "time": "12:00"},
-            {"date": "2025-04-17", "time": "15:00"}
-        ]
-        
         # Try up to 3 times with increasing timeouts
         max_retries = 3
         for attempt in range(1, max_retries + 1):
@@ -147,47 +137,14 @@ def check_piano_tuning_availability(postcode: str) -> str:
                 continue
         
         # If we get here, all attempts failed or returned unexpected results
-        # Fall back to using mock data
-        print("Falling back to mock data due to server issues")
-        
-        slot_list = []
-        for i, slot in enumerate(mock_slots, 1):
-            try:
-                date = datetime.strptime(slot['date'], '%Y-%m-%d')
-                formatted_date = date.strftime('%A, %B %d')
-                slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
-            except Exception:
-                slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
-        
-        message = (
-            f"Thank you for your patience! I found some suitable tuning slots:\n\n" +
-            "\n".join(slot_list) +
-            "\n\nWould any of these times work for you? If not, I can suggest more options. " +
-            "(Note: Our booking system is experiencing some delays, but these slots are generally available.)"
-        )
-        return message
+        return "I'm sorry, I'm currently having trouble accessing our booking system. Please call Lee directly on 01442 876131 to check availability and book your piano tuning appointment."
             
     except Exception as e:
         print(f"Error checking availability: {type(e).__name__}: {e}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         
-        # In case of a complete failure, return a human readable error with mock data
-        slot_list = []
-        for i, slot in enumerate(mock_slots, 1):
-            try:
-                date = datetime.strptime(slot['date'], '%Y-%m-%d')
-                formatted_date = date.strftime('%A, %B %d')
-                slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
-            except Exception:
-                slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
-        
-        return (
-            f"I'm having some technical difficulties connecting to our booking system, " 
-            f"but here are some typically available slots:\n\n" +
-            "\n".join(slot_list) +
-            "\n\nWould any of these times work for you? If so, please call Lee on 01442 876131 to confirm your booking."
-        )
+        return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
 def handle_piano_tuning_request(user_input: str) -> str:
     """Handle piano tuning related requests."""
@@ -352,9 +309,8 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         # Return a friendly message asking the user to call instead
         formatted_date_str = parsed_date.strftime("%A, %B %d") if 'parsed_date' in locals() else date
         return (
-            f"I've tried to book your appointment for {formatted_date_str} at {time}, but our booking system is "
-            f"experiencing some technical difficulties. Please call Lee on 01442 876131 to complete your booking. "
-            f"Please mention that you'd like to book for {formatted_date_str} at {time} and he'll get you sorted right away."
+            f"I'm sorry, I'm having trouble connecting to our booking system at the moment. "
+            f"Please call Lee directly on 01442 876131 to book your piano tuning appointment."
         )
 
     except Exception as e:
@@ -773,34 +729,14 @@ def ask():
         contains_tuning_keywords = re.search(r'(piano|tuning|tune|appointment)', question, re.IGNORECASE)
         
         if contains_postcode or contains_tuning_keywords:
-            # Provide fallback response with mock data
-            mock_slots = [
-                {"date": "2025-04-15", "time": "10:30"},
-                {"date": "2025-04-15", "time": "13:30"},
-                {"date": "2025-04-16", "time": "09:00"},
-                {"date": "2025-04-16", "time": "10:30"},
-                {"date": "2025-04-17", "time": "12:00"},
-                {"date": "2025-04-17", "time": "15:00"}
-            ]
-            
-            slot_list = []
-            for i, slot in enumerate(mock_slots, 1):
-                try:
-                    date = datetime.strptime(slot['date'], '%Y-%m-%d')
-                    formatted_date = date.strftime('%A, %B %d')
-                    slot_list.append(f"{i}. {formatted_date} at {slot['time']}")
-                except Exception:
-                    slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
-            
-            mock_response = (
-                f"I'm having some technical difficulties connecting to our booking system, " 
-                f"but here are some typically available slots:\n\n" +
-                "\n".join(slot_list) +
-                "\n\nWould any of these times work for you? If so, please call Lee on 01442 876131 to confirm your booking."
+            # Provide straightforward error message for tuning inquiries
+            error_msg = (
+                "I'm sorry, I'm having technical difficulties accessing our booking system right now. "
+                "Please call Lee directly on 01442 876131 to check availability and book your piano tuning appointment."
             )
             
             return jsonify({
-                'response': mock_response,
+                'response': error_msg,
                 'agent': 'Monty Agent',
                 'audio': None
             })

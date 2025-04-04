@@ -365,20 +365,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         // Handle 500 error from Flask backend
                         if (response.status === 500) {
-                            // Add the mock data fallback directly here
-                            const mockResponse = `I'm having some technical difficulties connecting to our booking system, but here are some typically available slots:
-
-1. Monday, April 15 at 10:30
-2. Monday, April 15 at 13:30
-3. Tuesday, April 16 at 09:00
-4. Tuesday, April 16 at 10:30
-5. Wednesday, April 17 at 12:00
-6. Wednesday, April 17 at 15:00
-
-Would any of these times work for you? If so, please call Lee on 01442 876131 to confirm your booking.`;
-                            
-                            addMessage(mockResponse, false, null, false);
-                            return; // Exit early after adding mock response
+                            // Show error message instead of mock data
+                            const errorMsg = "I'm sorry, we're having technical difficulties connecting to our booking system. Please try again later or call Lee directly on 01442 876131 for assistance.";
+                            addMessage(errorMsg, false, null, false);
+                            return; // Exit early after adding error message
                         }
                         
                         throw new Error(`Failed to get response: ${response.status} ${response.statusText}`);
