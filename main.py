@@ -45,6 +45,10 @@ def check_piano_tuning_availability(postcode: str) -> str:
         # First, return an intermediate message for the user
         intermediate_message = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!"
         
+        # Clean up the postcode - remove any special characters that might cause issues
+        postcode = re.sub(r'[^A-Za-z0-9\s]', '', postcode).strip()
+        
+        print(f"\n==================================================")
         print(f"Checking availability for postcode: {postcode}")
         
         # Try up to 3 times with increasing timeouts
@@ -80,25 +84,31 @@ def check_piano_tuning_availability(postcode: str) -> str:
                 
                 if response.content:
                     try:
-                        print(f"Response content (first 200 chars): {response.content[:200]}")
+                        print(f"Response content (first 300 chars): {response.content[:300]}")
                     except:
                         print("Could not display response content")
                 
                 # If successful, process the response
                 if response.status_code == 200:
                     try:
-                        data = response.json()
+                        # Get the raw text first for debugging
+                        response_text = response.text
+                        print(f"Raw response text length: {len(response_text)}")
+                        print(f"Raw response text starts with: {response_text[:100]}")
+                        
+                        # Parse as JSON
+                        data = json.loads(response_text)
                         slots = data.get('available_slots', [])
                         total_slots = data.get('total_slots', 0)
                         
-                        print(f"Successfully parsed response. Found {total_slots} slots.")
+                        print(f"Successfully parsed response JSON. Found {total_slots} slots.")
                         
                         if not slots:
                             return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
                         
                         # Format the slots into a readable message
                         slot_list = []
-                        for i, slot in enumerate(slots, 1):
+                        for i, slot in enumerate(slots[:10], 1):  # Limit to first 10 slots to avoid large messages
                             try:
                                 # Ensure we're working with naive datetime objects
                                 date = datetime.strptime(slot['date'], '%Y-%m-%d')
@@ -109,16 +119,25 @@ def check_piano_tuning_availability(postcode: str) -> str:
                                 # Fallback to using the date string directly
                                 slot_list.append(f"{i}. {slot['date']} at {slot['time']}")
                         
+                        # Add a note if we're only showing a subset of slots
+                        additional_info = ""
+                        if total_slots > 10:
+                            additional_info = f"\n\n(Showing the first 10 of {total_slots} available slots)"
+                        
                         message = (
                             f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
                             "\n".join(slot_list) +
+                            additional_info +
                             "\n\nWould any of these times work for you? If not, I can suggest more options."
                         )
+                        print("Successfully generated response message")
+                        print("==================================================\n")
                         return message
                     except json.JSONDecodeError as json_err:
                         print(f"JSON decode error: {json_err}")
                         print(f"Full response content: {response.content}")
-                        # Continue to the next retry attempt
+                        # Log the error but continue to the next retry attempt
+                        print(f"Will retry {max_retries - attempt} more times")
                 
                 elif response.status_code == 400:
                     try:
@@ -150,12 +169,15 @@ def check_piano_tuning_availability(postcode: str) -> str:
                 continue
         
         # If we get here, all attempts failed or returned unexpected results
+        print("All attempts failed, returning error message")
+        print("==================================================\n")
         return "I'm sorry, I'm currently having trouble accessing our booking system. Please call Lee directly on 01442 876131 to check availability and book your piano tuning appointment."
             
     except Exception as e:
         print(f"Error checking availability: {type(e).__name__}: {e}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
+        print("==================================================\n")
         
         return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
@@ -202,9 +224,10 @@ def process_message(message: str, context: dict = None) -> str:
 @function_tool
 def book_piano_tuning(date: str, time: str, customer_name: str, address: str, phone: str) -> str:
     """Book a piano tuning appointment. Returns a confirmation or error message."""
-    print(f"DEBUG: book_piano_tuning tool called.")
+    print(f"\n==================================================")
+    print(f"book_piano_tuning tool called.")
     try:
-        print(f"\nAttempting to book tuning with data:")
+        print(f"Attempting to book tuning with data:")
         print(f"Date: {date}")
         print(f"Time: {time}")
         print(f"Customer: {customer_name}")
@@ -245,13 +268,14 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 formatted_date = parsed_date.strftime('%Y-%m-%d')
             except ValueError as e:
                 print(f"Error parsing date in tool: {e}")
+                print("==================================================\n")
                 return "Sorry, the date format was unclear. Please provide the date as shown in the available slots."
         
         # Make request to booking server with retry mechanism
         max_retries = 3
         for attempt in range(1, max_retries + 1):
             timeout = 30 * attempt  # Increase timeout with each retry
-            print(f"\nMaking request to booking server (attempt {attempt}/{max_retries}, timeout {timeout}s)...")
+            print(f"Making request to booking server (attempt {attempt}/{max_retries}, timeout {timeout}s)...")
             print(f"URL: https://monty-mcp.onrender.com/create-booking")
             print(f"Request payload: {{'date': '{formatted_date}', 'time': '{time}', 'customer_name': '{customer_name}', 'address': '{address}', 'phone': '{phone}'}}")
             
@@ -286,33 +310,45 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 
                 if response.content:
                     try:
-                        print(f"Response content (first 200 chars): {response.content[:200]}")
+                        print(f"Response content (first 300 chars): {response.content[:300]}")
                     except:
                         print("Could not display response content")
                 
                 # Process the response if we got one
                 try:
-                    data = response.json()
+                    # Get the raw text first for debugging
+                    response_text = response.text
+                    print(f"Raw response text length: {len(response_text)}")
+                    print(f"Raw response text starts with: {response_text[:100]}")
+                    
+                    # Parse as JSON
+                    data = json.loads(response_text)
+                    
                     # Prioritize error message if status is not OK
                     if not response.ok:
                         error_msg = data.get('error') or data.get('message') or f"Booking failed (status {response.status_code})"
-                        print(f"DEBUG: Tool returning error message: {error_msg}")
+                        print(f"Request failed with message: {error_msg}")
+                        print("==================================================\n")
                         return error_msg
                     
                     # If OK, return the message
                     message_from_server = data.get('message')
                     if message_from_server:
-                        print(f"DEBUG: Tool returning success message: {message_from_server}")
+                        print(f"Booking successful with message: {message_from_server}")
+                        print("==================================================\n")
                         return message_from_server
                     else:
                         # Fallback success message if server message missing
-                        print(f"DEBUG: Tool returning generic success message (server message missing).")
+                        print(f"Booking successful but no message from server, using generic message")
+                        print("==================================================\n")
                         return f"Booking confirmed for {formatted_date} at {time}."
                 except json.JSONDecodeError as json_err:
                     print(f"JSON decode error on attempt {attempt}: {json_err}")
                     print(f"Full response content: {response.content}")
                     # Only return error on last attempt
                     if attempt == max_retries:
+                        print("Max retries reached with JSON decode errors")
+                        print("==================================================\n")
                         return f"Booking system response was unclear. Please call Lee on 01442 876131 to confirm your booking."
                     continue
                     
@@ -333,6 +369,8 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         # If we get here, all attempts failed
         # Return a friendly message asking the user to call instead
         formatted_date_str = parsed_date.strftime("%A, %B %d") if 'parsed_date' in locals() else date
+        print("All booking attempts failed, returning error message")
+        print("==================================================\n")
         return (
             f"I'm sorry, I'm having trouble connecting to our booking system at the moment. "
             f"Please call Lee directly on 01442 876131 to book your piano tuning appointment."
@@ -342,6 +380,7 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
         print(f"Error in book_piano_tuning tool processing: {type(e).__name__}: {e}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
+        print("==================================================\n")
         return ("I apologize, but an unexpected error occurred during the booking process. "
                 "Please call Lee on 01442 876131 to book your appointment directly.")
 
@@ -624,6 +663,9 @@ def ask():
     session_id = data.get('session_id', 'default')
     
     try:
+        print("\n==================================================")
+        print(f"Processing request for question: {question[:50]}...")
+        
         # Get or initialize conversation history for this session
         if session_id not in conversation_history:
             conversation_history[session_id] = {
@@ -642,8 +684,19 @@ def ask():
             input_list = conversation + [{"role": "user", "content": question}]
             try:
                 print(f"Running agent with input: {input_list[-1]}")
-                result = asyncio.run(Runner.run(last_agent, input_list))
-                print(f"Agent run completed successfully")
+                
+                # Create a wrapper to catch and debug any errors in the agent run
+                try:
+                    result = asyncio.run(Runner.run(last_agent, input_list))
+                    print(f"Agent run completed successfully")
+                except Exception as agent_err:
+                    print(f"CRITICAL ERROR in agent run: {agent_err}")
+                    print(f"Agent error type: {type(agent_err).__name__}")
+                    import traceback
+                    print(f"Agent error traceback: {traceback.format_exc()}")
+                    # Let the outer handler deal with this
+                    raise agent_err
+                
             except Exception as e:
                 print(f"Error running agent with conversation history: {e}")
                 print(f"Agent error type: {type(e).__name__}")
@@ -680,19 +733,28 @@ def ask():
                 print(f"Error running triage agent for new question: {new_q_err}")
                 raise new_q_err
         
-        print(f"Agent response: {result.final_output}")
+        print(f"Agent response: {result.final_output[:100]}...")
         final_message_text = result.final_output # Use agent's text response directly
         
         # Update conversation history
-        conversation_history[session_id]['conversation'] = [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in result.to_input_list()
-            if "role" in msg and "content" in msg
-        ]
-        conversation_history[session_id]['last_agent'] = result._last_agent
+        try:
+            print("Updating conversation history...")
+            conversation_history[session_id]['conversation'] = [
+                {"role": msg["role"], "content": msg["content"]}
+                for msg in result.to_input_list()
+                if "role" in msg and "content" in msg
+            ]
+            conversation_history[session_id]['last_agent'] = result._last_agent
+            print("Conversation history updated successfully")
+        except Exception as hist_err:
+            print(f"Error updating conversation history: {hist_err}")
+            import traceback
+            print(f"History update error traceback: {traceback.format_exc()}")
+            # Continue despite history update error
 
         # Generate audio response using final_message_text
         try:
+            print("Generating audio response...")
             current_agent = result._last_agent
             voice_settings = AGENT_VOICE_SETTINGS.get(current_agent.name)
             hex_audio = None
@@ -736,13 +798,22 @@ def ask():
                 'agent': current_agent.name,
                 'audio': hex_audio
             }
+            
+            # Debug the response data (without the full audio)
+            debug_data = response_data.copy()
+            if 'audio' in debug_data:
+                debug_data['audio'] = f"[Audio data length: {len(debug_data['audio']) if debug_data['audio'] else 0}]"
+            print(f"Response data: {debug_data}")
                 
             response = jsonify(response_data)
             print("Response created successfully (simple text + audio)")
+            print("==================================================\n")
             return response
 
         except Exception as e:
             print(f"Error generating audio or constructing final response: {str(e)}")
+            import traceback
+            print(f"Audio error traceback: {traceback.format_exc()}")
             # Fallback response without audio if error occurs
             return jsonify({
                 'response': final_message_text,
@@ -755,6 +826,7 @@ def ask():
         print(f"Error type: {type(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
+        print("==================================================\n")
         
         # Check if postcode is in question and this might be a tuning request
         contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
