@@ -19,6 +19,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Create thinking sound audio element
     const thinkingSound = new Audio();
     thinkingSound.volume = 0.5; // Set volume to 50%
+    
+    // Track current playing response audio
+    let currentResponseAudio = null;
+    
+    // Flag to track if we're showing an intermediate message
+    let isShowingIntermediate = false;
+    // Store the intermediate message element for later removal
+    let intermediateElement = null;
 
     // Preload all thinking sounds
     const preloadedSounds = thinkingSounds.map(src => {
@@ -62,11 +70,40 @@ document.addEventListener('DOMContentLoaded', function() {
             errorMessage.style.display = 'none';
         }, 5000);
     }
+    
+    function stopCurrentAudio() {
+        // Stop any currently playing response audio
+        if (currentResponseAudio) {
+            console.log('Stopping currently playing audio');
+            currentResponseAudio.pause();
+            currentResponseAudio.currentTime = 0;
+            // We don't remove the element here as it might still be in the DOM
+        }
+        
+        // Also stop thinking sound
+        thinkingSound.pause();
+        thinkingSound.currentTime = 0;
+    }
 
-    function addMessage(content, isUser = false, audioData = null) {
-        console.log('Adding message:', { content, isUser, hasAudio: !!audioData });
+    function addMessage(content, isUser = false, audioData = null, isIntermediate = false) {
+        console.log('Adding message:', { content, isUser, hasAudio: !!audioData, isIntermediate });
+        
+        // If this is a final response and we have an intermediate message showing, remove it
+        if (!isIntermediate && isShowingIntermediate && intermediateElement) {
+            console.log('Removing intermediate message');
+            chatContainer.removeChild(intermediateElement);
+            isShowingIntermediate = false;
+            intermediateElement = null;
+        }
+        
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user' : 'monty'}`;
+        
+        if (isIntermediate) {
+            messageDiv.classList.add('intermediate-message');
+            isShowingIntermediate = true;
+            intermediateElement = messageDiv;
+        }
         
         const textDiv = document.createElement('div');
         textDiv.className = 'message-text';
@@ -75,9 +112,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!isUser && audioData) {
             console.log('Processing audio data, length:', audioData.length);
-            // Stop thinking sound when Monty starts speaking
-            thinkingSound.pause();
-            thinkingSound.currentTime = 0;
+            
+            // Stop any currently playing audio (both response and thinking sounds)
+            stopCurrentAudio();
             
             const audioDiv = document.createElement('div');
             audioDiv.className = 'message-audio';
@@ -97,17 +134,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 audio.src = audioUrl;
                 
+                // Set as current audio before playing
+                currentResponseAudio = audio;
+                
                 console.log('Attempting to play audio...');
                 audio.play().then(() => {
                     console.log('Audio playback started successfully');
                 }).catch(error => {
                     console.error('Error playing audio:', error);
                     showError('Error playing audio response');
+                    currentResponseAudio = null;
                 });
                 
                 audio.addEventListener('ended', () => {
                     console.log('Audio playback ended');
                     URL.revokeObjectURL(audioUrl);
+                    if (currentResponseAudio === audio) {
+                        currentResponseAudio = null;
+                    }
                     audio.remove();
                 });
                 
@@ -116,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 console.error('Error processing audio data:', error);
                 showError('Error processing audio response');
+                currentResponseAudio = null;
             }
         }
 
@@ -123,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    function sendMessage() {
+    async function sendMessage() {
         const message = userInput.value.trim();
         if (message) {
             userInput.disabled = true;
@@ -138,44 +183,207 @@ document.addEventListener('DOMContentLoaded', function() {
             typingIndicator.style.display = 'block';
             playRandomThinkingSound();
             
-            console.log('Sending message to server...');
-            fetch('/ask', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ message: message })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Received response from server:', data);
-                typingIndicator.style.display = 'none';
-                thinkingSound.pause();
-                thinkingSound.currentTime = 0;
+            // Check if this is a postcode query for tuning availability
+            const postcodeRegex = /[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i;
+            const containsTuningKeywords = /piano|tuning|tuner|tune/i.test(message.toLowerCase());
+            const hasTuningContext = chatContainer.innerHTML.toLowerCase().includes('tuning') || 
+                                     chatContainer.innerHTML.includes('postcode');
+            const isPostcodeQuery = postcodeRegex.test(message);
+
+            // More precise detection of booking flow stages
+            // This chat history analysis determines if we're already past the initial postcode check stage
+            const inBookingFlowSignals = [
+                // Already seen available slots (specific text in the response)
+                chatContainer.innerHTML.includes("suitable tuning slots") || 
+                chatContainer.innerHTML.includes("We have available piano tuning slots"),
                 
-                if (data.error) {
-                    console.error('Server error:', data.error);
-                    showError(data.error);
-                    return;
+                // Time selection indicators
+                chatContainer.innerHTML.includes("Which slot would you prefer?") ||
+                chatContainer.innerHTML.includes("Would any of these times work for you?"),
+                
+                // Date/time detection (checking for time patterns and day names)
+                /\b([0-1]?[0-9]|2[0-3]):[0-5][0-9]\b/.test(chatContainer.innerHTML) || // Time pattern HH:MM
+                /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/i.test(chatContainer.innerHTML) ||
+                /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(chatContainer.innerHTML),
+                
+                // Selection phrases - after user has chosen a slot
+                /\bI('ll| will) book (slot|appointment|time|number) \d/i.test(chatContainer.innerHTML) ||
+                /\bI('d| would) like (slot|appointment|time|number) \d/i.test(chatContainer.innerHTML) ||
+                /\b(slot|appointment|time|number|option) \d\b/i.test(chatContainer.innerHTML),
+                
+                // Name/contact details collection phase 
+                chatContainer.innerHTML.includes("What's your name?") ||
+                chatContainer.innerHTML.includes("What's your full name?") ||
+                chatContainer.innerHTML.includes("Could you provide your address?") ||
+                chatContainer.innerHTML.includes("Could you provide your phone number?"),
+                
+                // User providing booking details (check for common name/address/phone patterns)
+                /\bMy name is\b/i.test(chatContainer.innerHTML) ||
+                /\bMy address is\b/i.test(chatContainer.innerHTML) ||
+                /\bMy phone (number|is)\b/i.test(chatContainer.innerHTML) ||
+                /\b\d{5,}\b/.test(chatContainer.innerHTML), // Phone number pattern
+                
+                // Specific confirmation phrases
+                chatContainer.innerHTML.includes("appointment is all set") ||
+                chatContainer.innerHTML.includes("Booking confirmed")
+            ];
+
+            // If ANY of these signals are true, we're already in the booking flow
+            const isAlreadyInBookingFlow = inBookingFlowSignals.some(signal => signal === true);
+
+            // Only show initial postcode message if:
+            // 1. This is a postcode
+            // 2. We have tuning context
+            // 3. We're NOT already in the booking flow
+            if (isPostcodeQuery && (containsTuningKeywords || hasTuningContext) && !isAlreadyInBookingFlow) {
+                // Use HTML to make the first word bold
+                const intermediateMessageText = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!";
+                const firstWord = intermediateMessageText.split(' ')[0];
+                const restOfMessage = intermediateMessageText.substring(firstWord.length);
+                const intermediateMessage = `<strong>${firstWord}</strong>${restOfMessage}`;
+                
+                // For simplicity, we'll request an audio response for this message
+                try {
+                    // Add the intermediate message first - use HTML instead of plain text
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message monty intermediate-message';
+                    
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'message-text';
+                    textDiv.innerHTML = intermediateMessage; // Use innerHTML to render the HTML
+                    
+                    messageDiv.appendChild(textDiv);
+                    chatContainer.appendChild(messageDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    
+                    // Track this as an intermediate message
+                    isShowingIntermediate = true;
+                    intermediateElement = messageDiv;
+                    
+                    // Request audio for the intermediate message (audio will be for the full message)
+                    const audioResponse = await fetch('/generate-audio', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message: intermediateMessageText }) // Use plain text for audio
+                    });
+                    
+                    if (audioResponse.ok) {
+                        const audioData = await audioResponse.json();
+                        if (audioData.audio) {
+                            // Add audio to the existing intermediate message
+                            const audioDiv = document.createElement('div');
+                            audioDiv.className = 'message-audio';
+                            const audio = document.createElement('audio');
+                            audio.style.display = 'none';
+                            
+                            try {
+                                console.log('Converting hex to audio array...');
+                                const audioArray = new Uint8Array(audioData.audio.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                
+                                const audioBlob = new Blob([audioArray], { type: 'audio/mp3' });
+                                const audioUrl = URL.createObjectURL(audioBlob);
+                                
+                                audio.src = audioUrl;
+                                
+                                // Set as current audio before playing
+                                currentResponseAudio = audio;
+                                
+                                audio.play().then(() => {
+                                    console.log('Intermediate audio playback started successfully');
+                                }).catch(error => {
+                                    console.error('Error playing intermediate audio:', error);
+                                    currentResponseAudio = null;
+                                });
+                                
+                                audio.addEventListener('ended', () => {
+                                    console.log('Intermediate audio playback ended');
+                                    URL.revokeObjectURL(audioUrl);
+                                    if (currentResponseAudio === audio) {
+                                        currentResponseAudio = null;
+                                    }
+                                    audio.remove();
+                                });
+                                
+                                audioDiv.appendChild(audio);
+                                messageDiv.appendChild(audioDiv);
+                            } catch (error) {
+                                console.error('Error processing intermediate audio:', error);
+                                currentResponseAudio = null;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error handling intermediate message:', error);
+                    // If there's an error with HTML approach, fall back to the original method
+                    addMessage(intermediateMessageText, false, null, true);
                 }
-                
-                addMessage(data.response, false, data.audio);
-                
-                // Notify parent window that we received a reply
-                window.parent.postMessage({ type: 'monty-reply' }, '*');
-            })
-            .catch(error => {
+            }
+            
+            console.log('Sending message to server...');
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to get response');
+                }
+
+                const data = await response.json(); // Get the JSON response
+                if (data.response) {
+                    // Add the text message to the chat (not an intermediate message)
+                    addMessage(data.response, false, data.audio, false);
+                    
+                    // Check if this is a booking confirmation message
+                    const isBookingConfirmation = data.response.includes("appointment is all set") || 
+                                                  data.response.includes("piano tuning appointment is all set") ||
+                                                  data.response.includes("Booking confirmed") ||
+                                                  data.response.includes("Your piano tuning appointment");
+                    
+                    // If this is a booking confirmation, add payment message
+                    if (isBookingConfirmation) {
+                        setTimeout(() => {
+                            // Add payment message with link
+                            const paymentMessageText = "To confirm and pay for your tuning please visit https://buy.stripe.com/aEUdTUaLId6EgBW9AA";
+                            
+                            // Create payment message element
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = 'message monty payment-message';
+                            
+                            const textDiv = document.createElement('div');
+                            textDiv.className = 'message-text';
+                            
+                            // Convert the URL to a clickable link
+                            const urlRegex = /(https?:\/\/[^\s]+)/g;
+                            const htmlContent = paymentMessageText.replace(urlRegex, function(url) {
+                                return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                            });
+                            
+                            textDiv.innerHTML = htmlContent;
+                            messageDiv.appendChild(textDiv);
+                            chatContainer.appendChild(messageDiv);
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                            
+                        }, 2000); // Add payment message after 2 seconds
+                    }
+                }
+            } catch (error) {
                 console.error('Error:', error);
+                addMessage('Sorry, I encountered an error. Please try again.', 'system');
+            } finally {
                 typingIndicator.style.display = 'none';
                 thinkingSound.pause();
                 thinkingSound.currentTime = 0;
-                showError('Sorry, I encountered an error. Please try again.');
-            })
-            .finally(() => {
                 userInput.disabled = false;
                 sendButton.disabled = false;
                 userInput.focus();
-            });
+            }
         }
     }
 

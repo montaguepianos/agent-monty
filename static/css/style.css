@@ -157,6 +157,37 @@ header {
     margin-left: auto;
 }
 
+.message.intermediate-message {
+    background-color: rgba(255, 248, 225, 0.85);
+    border-left: 3px solid #FFC107;
+    font-style: italic;
+    animation: pulse-subtle 2s infinite;
+}
+
+.message.payment-message {
+    background-color: rgba(232, 245, 233, 0.9);
+    border-left: 3px solid #4CAF50;
+    font-style: normal;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.message.payment-message a {
+    color: #2E7D32;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.message.payment-message a:hover {
+    text-decoration: none;
+}
+
+@keyframes pulse-subtle {
+    0% { opacity: 0.85; }
+    50% { opacity: 1; }
+    100% { opacity: 0.85; }
+}
+
 .message-content {
     display: flex;
     align-items: flex-start;
@@ -322,3 +353,11 @@ button:hover {
     font-weight: bold;
     color: #2c3e50;
 } 
+
+.hidden {
+    display: none;
+}
+
+#dynamic-pay-button {
+    margin-top: 15px;
+}

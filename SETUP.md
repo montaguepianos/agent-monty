@@ -49,6 +49,10 @@ git commit -m "Describe what you changed"
 git push
 ```
 
+git add .
+git commit -m "Added MCP Serve connections"
+git push
+
 This automatically triggers a redeploy on Render (usually within ~60 seconds).
 
 If it's the first push from a new machine or setup:

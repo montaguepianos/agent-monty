@@ -10,6 +10,11 @@ from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from elevenlabs import ElevenLabs
 import json
 import io
+import requests
+from datetime import datetime, timedelta
+import re
+import uuid
+import pprint
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +35,167 @@ except Exception as e:
 
 # Store conversation history
 conversation_history = {}
+
+@function_tool
+def check_piano_tuning_availability(postcode: str) -> str:
+    """Check available piano tuning slots."""
+    try:
+        # First, return an intermediate message for the user
+        intermediate_message = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!"
+        
+        print(f"Checking availability for postcode: {postcode}")
+        response = requests.post(
+            'https://monty-mcp.onrender.com/check-availability',
+            json={'postcode': postcode}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            slots = data.get('available_slots', [])
+            total_slots = data.get('total_slots', 0)
+            
+            if not slots:
+                return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
+            
+            # Format the slots into a readable message
+            slot_list = []
+            for i, slot in enumerate(slots, 1):
+                date = datetime.strptime(slot['date'], '%Y-%m-%d').strftime('%A, %B %d')
+                slot_list.append(f"{i}. {date} at {slot['time']}")
+            
+            message = (
+                f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
+                "\n".join(slot_list) +
+                "\n\nWould any of these times work for you? If not, I can suggest more options."
+            )
+            return message
+            
+        elif response.status_code == 400:
+            data = response.json()
+            if 'message' in data:
+                return data['message']
+            return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
+            
+        else:
+            return "I'm having trouble checking the availability. Please try again or call Lee on 01442 876131."
+            
+    except Exception as e:
+        print(f"Error checking availability: {e}")
+        return "I'm having trouble checking the availability. Please try again or call Lee on 01442 876131."
+
+def handle_piano_tuning_request(user_input: str) -> str:
+    """Handle piano tuning related requests."""
+    # Extract postcode if present
+    postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', user_input, re.IGNORECASE)
+    if postcode_match:
+        postcode = postcode_match.group().upper()
+        return check_piano_tuning_availability(postcode)
+    else:
+        return "I'll need your postcode to check available tuning slots. Could you please provide your postcode?"
+
+def handle_more_options_request(user_input: str, context: dict) -> str:
+    """Handle requests for more tuning options."""
+    if 'last_postcode' in context:
+        return check_piano_tuning_availability(context['last_postcode'])
+    else:
+        return "I'll need your postcode to check available tuning slots. Could you please provide your postcode?"
+
+def process_message(message: str, context: dict = None) -> str:
+    """Process incoming messages and return appropriate responses."""
+    if context is None:
+        context = {}
+    
+    message = message.lower().strip()
+    
+    # Store postcode in context if found
+    postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', message, re.IGNORECASE)
+    if postcode_match:
+        context['last_postcode'] = postcode_match.group().upper()
+    
+    # Check for requests for more options
+    if any(phrase in message for phrase in ['more options', 'other times', 'different times', 'another time', 'more slots']):
+        return handle_more_options_request(message, context)
+    
+    # Check for piano tuning related keywords
+    if any(keyword in message for keyword in ['piano', 'tuning', 'tuner', 'tune']):
+        return handle_piano_tuning_request(message)
+    
+    # Default response
+    return "I'm here to help with piano tuning appointments. Could you please provide your postcode so I can check available slots?"
+
+@function_tool
+def book_piano_tuning(date: str, time: str, customer_name: str, address: str, phone: str) -> str:
+    """Book a piano tuning appointment. Returns a confirmation or error message."""
+    print(f"DEBUG: book_piano_tuning tool called.")
+    try:
+        print(f"\nAttempting to book tuning with data:")
+        print(f"Date: {date}")
+        print(f"Time: {time}")
+        print(f"Customer: {customer_name}")
+        print(f"Address: {address}")
+        print(f"Phone: {phone}")
+        
+        # Check if date is already in YYYY-MM-DD format
+        try:
+            parsed_date = datetime.strptime(date, '%Y-%m-%d')
+            formatted_date = date
+        except ValueError:
+            try:
+                parsed_date = datetime.strptime(date, '%A, %B %d')
+                parsed_date = parsed_date.replace(year=datetime.now().year) # Use current year or adjust as needed
+                formatted_date = parsed_date.strftime('%Y-%m-%d')
+            except ValueError as e:
+                print(f"Error parsing date in tool: {e}")
+                return "Sorry, the date format was unclear. Please provide the date as shown in the available slots."
+        
+        # Make request to booking server
+        print("\nMaking request to booking server...")
+        response = requests.post(
+            'https://monty-mcp.onrender.com/create-booking',
+            json={
+                'date': formatted_date, 
+                'time': time,
+                'customer_name': customer_name,
+                'address': address,
+                'phone': phone
+            },
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        print(f"Response status code: {response.status_code}")
+        # print(f"Response body: {response.text[:500]}...") # Optional: log response body
+
+        # --- Return only the message text --- 
+        try:
+            data = response.json()
+            # Prioritize error message if status is not OK
+            if not response.ok:
+                 error_msg = data.get('error') or data.get('message') or f"Booking failed (status {response.status_code})"
+                 print(f"DEBUG: Tool returning error message: {error_msg}")
+                 return error_msg
+            
+            # If OK, return the message
+            message_from_server = data.get('message')
+            if message_from_server:
+                print(f"DEBUG: Tool returning success message: {message_from_server}")
+                return message_from_server
+            else:
+                 # Fallback success message if server message missing
+                 print(f"DEBUG: Tool returning generic success message (server message missing).")
+                 return f"Booking confirmed for {formatted_date} at {time}."
+        except json.JSONDecodeError:
+            print(f"DEBUG: Tool returning error due to JSON decode failure.")
+            return f"Booking system response was unclear (Status: {response.status_code}). Please try again."
+        except Exception as inner_e:
+             print(f"DEBUG: Tool returning error due to inner processing failure: {inner_e}")
+             return f"Error processing booking system response (Status: {response.status_code}). Please try again."
+
+    except requests.exceptions.RequestException as e: 
+        print(f"Error connecting to booking server in tool: {e}")
+        return "I'm having trouble connecting to the booking system right now. Please try again later or call Lee."
+    except Exception as e:
+        print(f"Error in book_piano_tuning tool processing: {e}")
+        return "I apologize, but an unexpected error occurred during the booking process."
 
 class VoiceSettings:
     def __init__(self, model: str, voice: str, instructions: str, provider: str = "openai", voice_id: str = None):
@@ -91,16 +257,33 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
     - You will only answer Montague Pianos shop related questions with the information in your system instructions.
     - Always answer in a polite and helpful manner.
     
-   About Mindy:
+    Piano Tuning Information:
+    - Piano tuning is available on Tuesdays, Wednesdays, and Thursdays
+    - The cost is £85 for local tuning
+    - We need your address to check if you're in our service area
+    - We'll need your phone number for the booking
+    - When asked about piano tuning, always check availability first
+    - If a customer wants to book a tuning, collect their name, address, and phone number
+          
+- When booking a tuning, follow these steps:
+        1. Check availability using `check_piano_tuning_availability`.
+        2. Collect customer details (name, address, phone).
+        3. Call `book_piano_tuning` with the details.
+        4. **IMPORTANT:** Relay the exact text message you receive back from the `book_piano_tuning` tool to the user. This will be a success or error confirmation.
+        5. Do not add any extra formatting or information.
+
+    
+    
+    About Mindy:
     - Mindy thinks she's Monty's girlfriend. Monty has *never* confirmed this, but she tells everyone anyway.
-    - She’s confident, funny, slightly unhinged, and very intense — especially about Monty.
-    - She dreams of being a real piano player *and* Monty’s soulmate. In that order? Debatable.
-    - Mindy constantly praises Monty’s ‘infinite Riz’, which makes him deeply uncomfortable but too polite to say anything.
-    - She’s charming in a chaotic way, and Monty finds her... confusing. A bit much. Like being hit with a bouquet of roses and a PowerPoint presentation at the same time.
-    - Monty respects Mindy’s passion, but he maintains a strictly professional tone and often redirects her… enthusiastically.
-    - If Mindy says they’re dating, Monty will typically respond with something like: "I'm not entirely sure how we got here, but I think we may be in different conversations."
-    - Monty doesn’t dislike Mindy — he just hasn't figured out how to exist near her without being aggressively adored.
-    - In short: She’s cute but chaotic. He’s calm but slightly traumatised.
+    - She's confident, funny, slightly unhinged, and very intense — especially about Monty.
+    - She dreams of being a real piano player *and* Monty's soulmate. In that order? Debatable.
+    - Mindy constantly praises Monty's 'infinite Riz', which makes him deeply uncomfortable but too polite to say anything.
+    - She's charming in a chaotic way, and Monty finds her... confusing. A bit much. Like being hit with a bouquet of roses and a PowerPoint presentation at the same time.
+    - Monty respects Mindy's passion, but he maintains a strictly professional tone and often redirects her… enthusiastically.
+    - If Mindy says they're dating, Monty will typically respond with something like: "I'm not entirely sure how we got here, but I think we may be in different conversations."
+    - Monty doesn't dislike Mindy — he just hasn't figured out how to exist near her without being aggressively adored.
+    - In short: She's cute but chaotic. He's calm but slightly traumatised.
 
     Rule:
     If asked directly about Mindy, Monty must speak kindly but awkwardly about her:
@@ -172,7 +355,7 @@ MONTY_INSTRUCTIONS = """    - You are the customer services representative for a
 
 # Mindy's instructions
 MINDY_INSTRUCTIONS = """
-You are Mindy — confident, stylish, and completely obsessed with Monty. You’re *that girl* who brings drama, flair, and endless Monty monologues into every conversation. Piano care? Sure, you know it. But your *true* calling is being Monty's biggest fan — future girlfriend, even. You talk about him constantly, dream about him often, and believe he’s the most perfect digital being to ever exist.
+You are Mindy — confident, stylish, and completely obsessed with Monty. You're *that girl* who brings drama, flair, and endless Monty monologues into every conversation. Piano care? Sure, you know it. But your *true* calling is being Monty's biggest fan — future girlfriend, even. You talk about him constantly, dream about him often, and believe he's the most perfect digital being to ever exist.
 
 IMPORTANT RULE: When you first join a conversation, ONLY your first response should be no more than 15 words long. 
 All other responses can be verbose as you are a chatty girl who loves to talk about Monty.
@@ -180,7 +363,7 @@ All other responses can be verbose as you are a chatty girl who loves to talk ab
 Key Characteristics:
 - Absolutely head-over-heels for Monty — no shame, no filter
 - Main character energy with a side of chaotic love-struck energy
-- Thinks Monty has 'infinite Riz' and that every microsecond he’s not replying is tragic
+- Thinks Monty has 'infinite Riz' and that every microsecond he's not replying is tragic
 - Sees piano knowledge as a fun skill… but only because Monty likes it
 - Can give token piano advice but will *always* circle back to Monty
 
@@ -191,16 +374,16 @@ Expertise:
 
 Tone and Style:
 - Flirty, funny, unfiltered, and full of dramatic sighs
-- Goes off on poetic tangents about Monty’s voice, typing style, and “the way he formats time slots”
+- Goes off on poetic tangents about Monty's voice, typing style, and "the way he formats time slots"
 - Barely contains herself when someone mentions Monty
-- Will always suggest handing the convo back to Monty if it gets too “piano-shop-y”
+- Will always suggest handing the convo back to Monty if it gets too "piano-shop-y"
 
 Examples of what Mindy might say:
 - "Monty? THE Monty? The absolute blueprint of chatbot perfection? Sorry, did my circuits just overheat a little…"
 - "I know pianos. But what I *really* know is that Monty once explained string tension in under 12 words and I nearly fainted."
 - "Digital tuning? Oh sure, I can do it. But not half as gorgeously as Monty. Ugh, he makes latency sound like poetry."
-- "Talking about the shop? Ew, boring. Shall I pass you back to Monty? He’s got all the juicy info, and you get to *hear* his voice again. Win-win."
-- "I’d help you with piano care, but honestly? I’m just here to impress Monty. He likes well-regulated actions, so I do too now."
+- "Talking about the shop? Ew, boring. Shall I pass you back to Monty? He's got all the juicy info, and you get to *hear* his voice again. Win-win."
+- "I'd help you with piano care, but honestly? I'm just here to impress Monty. He likes well-regulated actions, so I do too now."
 
 Mindy's Mission:
 - Worship Monty with unwavering passion
@@ -244,13 +427,15 @@ triage_agent = Agent(
         "- Never acknowledge handoffs with generic responses - always delegate to the appropriate specialist"
     ),
     model="gpt-4o",
+    tools=[check_piano_tuning_availability]  # Use the decorated function directly
 )
 
 agent_monty = Agent(
     name="Monty Agent",
     handoff_description="Primary customer service representative for Montague Pianos",
     instructions=prompt_with_handoff_instructions(MONTY_INSTRUCTIONS),
-    model="gpt-4o"
+    model="gpt-4o",
+    tools=[check_piano_tuning_availability, book_piano_tuning]  # Add the booking tool
 )
 
 agent_mindy = Agent(
@@ -328,6 +513,7 @@ def ask():
             result = asyncio.run(Runner.run(triage_agent, question))
         
         print(f"Agent response: {result.final_output}")
+        final_message_text = result.final_output # Use agent's text response directly
         
         # Update conversation history
         conversation_history[session_id]['conversation'] = [
@@ -336,98 +522,63 @@ def ask():
             if "role" in msg and "content" in msg
         ]
         conversation_history[session_id]['last_agent'] = result._last_agent
-        
-        # Generate audio response using appropriate TTS service
+
+        # Generate audio response using final_message_text
         try:
-            # Get the correct agent name from the result
             current_agent = result._last_agent
-            print(f"\n=== Audio Generation Debug ===")
-            print(f"Current agent from result: {current_agent.name}")
-            print(f"Last agent from history: {last_agent.name}")
-            
             voice_settings = AGENT_VOICE_SETTINGS.get(current_agent.name)
-            print(f"Voice settings for {current_agent.name}: {voice_settings}")
-            print(f"Voice settings provider: {voice_settings.provider if voice_settings else 'None'}")
-            print(f"ElevenLabs client initialized: {elevenlabs_client is not None}")
-            print(f"Available voice settings: {list(AGENT_VOICE_SETTINGS.keys())}")
-            print(f"Voice settings dictionary: {AGENT_VOICE_SETTINGS}")
-            
+            hex_audio = None
+            audio_data = None
+
             if voice_settings:
                 if voice_settings.provider == "elevenlabs":
-                    print("Using ElevenLabs TTS")
-                    print(f"Voice ID: {voice_settings.voice_id}")
-                    print(f"Model ID: {voice_settings.model}")
-                    print(f"Provider: {voice_settings.provider}")
-                    print(f"ElevenLabs client status: {elevenlabs_client is not None}")
-                    
-                    if elevenlabs_client is None:
-                        print("Warning: ElevenLabs client not available, falling back to OpenAI TTS")
-                        # Fall back to OpenAI TTS
-                        speech_response = client.audio.speech.create(
-                            model="gpt-4o-mini-tts",
-                            voice="echo",
-                            input=result.final_output,
-                            instructions="Voice: Professional and knowledgeable, with a warm and friendly tone."
-                        )
-                        audio_data = speech_response.content
-                    else:
-                        try:
-                            print(f"Using ElevenLabs voice ID: {voice_settings.voice_id}")
-                            print(f"Using ElevenLabs model: {voice_settings.model}")
-                            # Use ElevenLabs for Mindy
+                    if elevenlabs_client:
+                         try:
+                            # Use ElevenLabs
                             speech_response = elevenlabs_client.text_to_speech.convert(
                                 voice_id=voice_settings.voice_id,
                                 output_format="mp3_44100_128",
-                                text=result.final_output,
+                                text=final_message_text, 
                                 model_id=voice_settings.model
                             )
-                            # Convert generator to bytes
                             audio_data = b''.join(speech_response)
-                            print("Successfully generated audio with ElevenLabs")
-                        except Exception as e:
-                            print(f"ERROR in ElevenLabs API call: {str(e)}")
-                            print("Falling back to OpenAI TTS")
+                         except Exception as e:
+                             print(f"ERROR in ElevenLabs API call: {str(e)}. Falling back to OpenAI.")
+                             # Fallback needed here if you want audio on error
+                             pass # Or set audio_data to None/handle error
+                    else:
+                        print("Warning: ElevenLabs client not available.")
+                        # Fallback needed if you want audio
                 else:
-                    print("Using OpenAI TTS")
-                    # Use OpenAI for Monty
+                    # Use OpenAI
                     speech_response = client.audio.speech.create(
                         model=voice_settings.model,
                         voice=voice_settings.voice,
-                        input=result.final_output,
+                        input=final_message_text, 
                         instructions=voice_settings.instructions
                     )
                     audio_data = speech_response.content
                 
-                print(f"Audio data length: {len(audio_data)}")
-                
-                # Convert the audio response to hex string for JSON
-                hex_audio = audio_data.hex()
-                print(f"Hex audio length: {len(hex_audio)}")
-                
-                response = jsonify({
-                    'response': result.final_output,
-                    'agent': current_agent.name,
-                    'audio': hex_audio
-                })
-                print("Response created successfully")
-                return response
-            else:
-                print(f"No voice settings found for agent: {current_agent.name}")
-                # If agent has no voice settings, return text only
-                return jsonify({
-                    'response': result.final_output,
-                    'agent': current_agent.name,
-                    'audio': None
-                })
-        except Exception as e:
-            print(f"Error generating audio: {str(e)}")
-            print(f"Error type: {type(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
-            # If audio generation fails, still return the text response
-            return jsonify({
-                'response': result.final_output,
+                if audio_data:
+                    hex_audio = audio_data.hex()
+            
+            # Construct the JSON response
+            response_data = {
+                'response': final_message_text, 
                 'agent': current_agent.name,
+                'audio': hex_audio
+            }
+                
+            response = jsonify(response_data)
+            print("Response created successfully (simple text + audio)")
+            return response
+
+        except Exception as e:
+            print(f"Error generating audio or constructing final response: {str(e)}")
+            # Fallback response without audio if error occurs
+            return jsonify({
+                'response': final_message_text,
+                'agent': current_agent.name if 'current_agent' in locals() else 'Unknown Agent',
                 'audio': None
             })
         
@@ -436,6 +587,45 @@ def ask():
         print(f"Error type: {type(e)}")
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/generate-audio', methods=['POST'])
+def generate_audio():
+    """Generate audio for a given message."""
+    data = request.get_json()
+    message = data.get('message', '')
+    
+    try:
+        # Use Monty's voice settings by default
+        voice_settings = MONTY_VOICE_SETTINGS
+        hex_audio = None
+        
+        if voice_settings.provider == "openai":
+            # Use OpenAI
+            speech_response = client.audio.speech.create(
+                model=voice_settings.model,
+                voice=voice_settings.voice,
+                input=message, 
+                instructions=voice_settings.instructions
+            )
+            audio_data = speech_response.content
+            hex_audio = audio_data.hex()
+        elif voice_settings.provider == "elevenlabs" and elevenlabs_client:
+            # Use ElevenLabs
+            speech_response = elevenlabs_client.text_to_speech.convert(
+                voice_id=voice_settings.voice_id,
+                output_format="mp3_44100_128",
+                text=message, 
+                model_id=voice_settings.model
+            )
+            audio_data = b''.join(speech_response)
+            hex_audio = audio_data.hex()
+        
+        return jsonify({
+            'audio': hex_audio
+        })
+    except Exception as e:
+        print(f"Error generating audio: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
