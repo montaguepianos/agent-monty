@@ -20,6 +20,7 @@ import pprint
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Initialize ElevenLabs client with error handling
