@@ -45,6 +45,9 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
         print(f"\n==================================================")
         print(f"Checking availability for postcode: {postcode}")
         
+        # First, return an intermediate message for the user (this will be output in the HTML for display)
+        intermediate_message = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!"
+        
         # Clean up the postcode - remove any special characters that might cause issues
         postcode = re.sub(r'[^A-Za-z0-9\s]', '', postcode).strip()
         print(f"Cleaned postcode: {postcode}")
@@ -59,7 +62,7 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                 'https://monty-mcp.onrender.com/check-availability',
                 json={'postcode': postcode},
                 headers={'Content-Type': 'application/json'},
-                timeout=30  # Increase timeout to 30 seconds
+                timeout=30  # 30 second timeout
             )
             
             print(f"Response status code: {response.status_code}")
@@ -248,7 +251,7 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 'https://monty-mcp.onrender.com/check-availability',
                 json={'postcode': cleaned_postcode},
                 headers={'Content-Type': 'application/json'},
-                timeout=20
+                timeout=30  # Increase timeout to 30 seconds to avoid timeouts
             )
             
             print(f"Availability check response status: {avail_response.status_code}")
@@ -331,7 +334,7 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                     'phone': phone
                 },
                 headers={'Content-Type': 'application/json'},
-                timeout=20  # 20 second timeout
+                timeout=30  # Increase timeout to 30 seconds to avoid timeouts
             )
             
             print(f"Response status code: {response.status_code}")
@@ -790,172 +793,166 @@ def ask():
         
         print(f"Processing request for question: {question[:50]}...")
         
-        # ONLY use hardcoded approach for direct postcode queries that look like booking requests
-        # This is a fallback in case the agent fails
-        contains_postcode = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE) is not None
-        is_likely_tuning_query = re.search(r'\b(tuning|tune|tuner|appointment|slot|book)\b', question, re.IGNORECASE) is not None
-        is_just_postcode = len(question.strip()) < 12  # Likely just a postcode with minimal other text
+        # Get or initialize conversation history for this session
+        if session_id not in conversation_history:
+            conversation_history[session_id] = {
+                'last_agent': agent_monty,  # Start directly with Monty for simplicity
+                'conversation': []
+            }
         
-        if contains_postcode and (is_likely_tuning_query or is_just_postcode):
-            # There's a postcode and it's likely a tuning query
-            # Let's try to extract the postcode and pass it directly to our function
-            try:
-                postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
-                if postcode_match:
-                    postcode = postcode_match.group()
-                    
-                    # Initialize or get history
-                    if session_id not in conversation_history:
-                        conversation_history[session_id] = {
-                            'last_agent': agent_monty,
-                            'conversation': [],
-                            'last_postcode': postcode  # Store postcode for later use
-                        }
-                    else:
-                        # Update the postcode in the session
-                        conversation_history[session_id]['last_postcode'] = postcode
-                    
-                    # Call our function directly
-                    response_text = check_piano_tuning_availability_direct(postcode)
-                    
-                    # Generate audio for the response
-                    audio_data = None
-                    try:
-                        # Use Monty's voice settings for direct responses
-                        voice_settings = MONTY_VOICE_SETTINGS
-                        
-                        if voice_settings.provider == "openai":
-                            # Use OpenAI for audio generation
-                            print(f"Generating audio with OpenAI for direct postcode response")
-                            speech_response = client.audio.speech.create(
-                                model=voice_settings.model,
-                                voice=voice_settings.voice,
-                                input=response_text,
-                                instructions=voice_settings.instructions
-                            )
-                            audio_bytes = speech_response.content
-                            audio_data = audio_bytes.hex()
-                            print(f"Successfully generated audio with OpenAI: {len(audio_data) // 2} bytes")
-                    except Exception as audio_err:
-                        print(f"Error generating audio for direct response: {audio_err}")
-                        audio_data = None
-                    
-                    return jsonify({
-                        'response': response_text,
-                        'agent': 'Monty Agent',
-                        'audio': audio_data
-                    })
-            except Exception as direct_err:
-                # If direct approach fails, we'll fall back to agent-based
-                print(f"Direct postcode handling failed: {direct_err}")
-        
-        # Use the agent-based approach for everything else
-        try:
-            # Initialize or get history
-            if session_id not in conversation_history:
-                conversation_history[session_id] = {
-                    'last_agent': agent_monty,  # Default to Monty directly for simplicity
-                    'conversation': []
-                }
+        # Extract postcode if present for direct handling
+        postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
+        if postcode_match:
+            # Check if this is likely a piano tuning request by looking at context
+            is_likely_tuning_query = re.search(r'\b(tuning|tune|tuner|appointment|slot|book)\b', question, re.IGNORECASE) is not None
             
-            # Get agent and history
-            agent = conversation_history[session_id]['last_agent']
-            history = conversation_history[session_id]['conversation']
+            # Check conversation history for tuning context
+            has_tuning_context = False
+            for msg in conversation_history[session_id].get('conversation', []):
+                if msg.get('role') == 'assistant' and 'content' in msg:
+                    if re.search(r'\b(postcode|tuning|booking|slot|appointment)\b', msg['content'], re.IGNORECASE):
+                        has_tuning_context = True
+                        break
             
-            # Clear history if it's getting too long (prevent token limit issues)
-            if len(history) > 20:
-                print("History getting long, truncating to last 10 messages")
-                history = history[-10:]
-                conversation_history[session_id]['conversation'] = history
+            # Also check if it's just a postcode with minimal other text
+            is_just_postcode = len(question.strip()) < 12
             
-            # Run the agent
-            if history:
-                input_list = history + [{"role": "user", "content": question}]
-                result = asyncio.run(Runner.run(agent, input_list))
-            else:
-                result = asyncio.run(Runner.run(agent, question))
-            
-            # Get response and truncate if too long
-            response_text = result.final_output
-            if len(response_text) > 1000:
-                response_text = response_text[:1000] + "..."
+            if is_likely_tuning_query or has_tuning_context or is_just_postcode:
+                # This is a postcode query related to tuning
+                postcode = postcode_match.group()
+                print(f"Detected postcode query: {postcode}")
                 
-            # Update history safely
-            try:
-                conversation_history[session_id]['conversation'] = [
-                    {"role": msg["role"], "content": msg["content"]}
-                    for msg in result.to_input_list()
-                    if "role" in msg and "content" in msg
-                ]
-                conversation_history[session_id]['last_agent'] = result._last_agent
-            except Exception as hist_err:
-                print(f"History update error: {hist_err}")
-            
-            # Generate audio for the response
-            audio_data = None
-            try:
-                # Get the appropriate voice settings for the agent
-                agent_name = result._last_agent.name
-                voice_settings = AGENT_VOICE_SETTINGS.get(agent_name, MONTY_VOICE_SETTINGS)
+                # Store postcode in session context
+                conversation_history[session_id]['last_postcode'] = postcode
                 
-                if voice_settings.provider == "openai":
-                    # Use OpenAI for audio generation
-                    print(f"Generating audio with OpenAI for agent: {agent_name}")
-                    speech_response = client.audio.speech.create(
-                        model=voice_settings.model,
-                        voice=voice_settings.voice,
-                        input=response_text,
-                        instructions=voice_settings.instructions
-                    )
-                    audio_bytes = speech_response.content
-                    audio_data = audio_bytes.hex()
-                    print(f"Successfully generated audio with OpenAI: {len(audio_data) // 2} bytes")
-                elif voice_settings.provider == "elevenlabs" and elevenlabs_client:
-                    # Use ElevenLabs for audio generation
-                    print(f"Generating audio with ElevenLabs for agent: {agent_name}")
-                    speech_response = elevenlabs_client.text_to_speech.convert(
-                        voice_id=voice_settings.voice_id,
-                        output_format="mp3_44100_128",
-                        text=response_text,
-                        model_id=voice_settings.model
-                    )
-                    audio_bytes = b''.join(speech_response)
-                    audio_data = audio_bytes.hex()
-                    print(f"Successfully generated audio with ElevenLabs: {len(audio_data) // 2} bytes")
-            except Exception as audio_err:
-                print(f"Error generating audio: {audio_err}")
+                # Get the response directly from our function
+                response_text = check_piano_tuning_availability_direct(postcode)
+                
+                # Generate audio for the response (if needed)
                 audio_data = None
+                try:
+                    # Use Monty's voice settings
+                    voice_settings = MONTY_VOICE_SETTINGS
+                    
+                    if voice_settings.provider == "openai":
+                        print(f"Generating audio with OpenAI for direct postcode response")
+                        speech_response = client.audio.speech.create(
+                            model=voice_settings.model,
+                            voice=voice_settings.voice,
+                            input=response_text,
+                            instructions=voice_settings.instructions
+                        )
+                        audio_bytes = speech_response.content
+                        audio_data = audio_bytes.hex()
+                        print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
+                except Exception as audio_err:
+                    print(f"Error generating audio: {audio_err}")
+                    audio_data = None
                 
-            # Send response with audio if available
-            return jsonify({
-                'response': response_text,
-                'agent': result._last_agent.name,
-                'audio': audio_data
-            })
+                # Update conversation history with this exchange
+                conversation_history[session_id]['conversation'].extend([
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": response_text}
+                ])
+                
+                return jsonify({
+                    'response': response_text,
+                    'agent': 'Monty Agent',
+                    'audio': audio_data
+                })
+        
+        # For non-postcode or agent-based handling, continue with standard approach
+        # Get the last agent and conversation history
+        last_agent = conversation_history[session_id].get('last_agent', agent_monty)
+        conversation = conversation_history[session_id].get('conversation', [])
+        
+        print(f"Processing question with agent: {last_agent.name}")
+        
+        # If this is a follow-up question, use the last agent and include conversation history
+        if conversation:
+            input_list = conversation + [{"role": "user", "content": question}]
+            try:
+                result = asyncio.run(Runner.run(last_agent, input_list))
+            except Exception as e:
+                if "not found" in str(e):
+                    print("Invalid message reference – clearing history and retrying.")
+                    conversation_history[session_id] = {
+                        'last_agent': agent_monty,
+                        'conversation': []
+                    }
+                    result = asyncio.run(Runner.run(agent_monty, question))
+                else:
+                    raise e
+        else:
+            # For new questions, start with Monty directly
+            result = asyncio.run(Runner.run(agent_monty, question))
+        
+        # Get response and truncate if too long
+        response_text = result.final_output
+        if len(response_text) > 1000:
+            response_text = response_text[:1000] + "..."
             
-        except Exception as agent_err:
-            print(f"Agent error: {agent_err}")
-            import traceback
-            print(traceback.format_exc())
+        # Update conversation history
+        conversation_history[session_id]['conversation'] = [
+            {"role": msg["role"], "content": msg["content"]}
+            for msg in result.to_input_list()
+            if "role" in msg and "content" in msg
+        ]
+        conversation_history[session_id]['last_agent'] = result._last_agent
+        
+        # Generate audio for the response
+        audio_data = None
+        try:
+            # Get the appropriate voice settings for the agent
+            agent_name = result._last_agent.name
+            voice_settings = AGENT_VOICE_SETTINGS.get(agent_name, MONTY_VOICE_SETTINGS)
             
-            # Fallback message
-            return jsonify({
-                'response': "I apologize, but I encountered an error. Please try again or ask a different question.",
-                'agent': 'Monty Agent',
-                'audio': None
-            })
+            if voice_settings.provider == "openai":
+                # Use OpenAI for audio generation
+                print(f"Generating audio with OpenAI for agent: {agent_name}")
+                speech_response = client.audio.speech.create(
+                    model=voice_settings.model,
+                    voice=voice_settings.voice,
+                    input=response_text,
+                    instructions=voice_settings.instructions
+                )
+                audio_bytes = speech_response.content
+                audio_data = audio_bytes.hex()
+                print(f"Successfully generated audio with OpenAI: {len(audio_data) // 2} bytes")
+            elif voice_settings.provider == "elevenlabs" and elevenlabs_client:
+                # Use ElevenLabs for audio generation
+                print(f"Generating audio with ElevenLabs for agent: {agent_name}")
+                speech_response = elevenlabs_client.text_to_speech.convert(
+                    voice_id=voice_settings.voice_id,
+                    output_format="mp3_44100_128",
+                    text=response_text,
+                    model_id=voice_settings.model
+                )
+                audio_bytes = b''.join(speech_response)
+                audio_data = audio_bytes.hex()
+                print(f"Successfully generated audio with ElevenLabs: {len(audio_data) // 2} bytes")
+        except Exception as audio_err:
+            print(f"Error generating audio: {audio_err}")
+            audio_data = None
             
+        # Send response with audio if available
+        return jsonify({
+            'response': response_text,
+            'agent': result._last_agent.name,
+            'audio': audio_data
+        })
+        
     except Exception as e:
-        print(f"Global error: {e}")
+        print(f"Error in ask endpoint: {e}")
         import traceback
-        print(traceback.format_exc())
+        print(f"Traceback: {traceback.format_exc()}")
         
         # Ultra-minimal fallback
         return jsonify({
-            'response': "Sorry, I encountered an error. Please try again.",
+            'response': "I apologize, but I encountered an error processing your request. Please try again or call Lee on 01442 876131 for assistance.",
             'agent': 'Monty Agent',
             'audio': None
-        })
+        }), 500
 
 @app.route('/generate-audio', methods=['POST'])
 def generate_audio():
