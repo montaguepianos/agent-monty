@@ -810,9 +810,18 @@ def ask():
             has_tuning_context = False
             for msg in conversation_history[session_id].get('conversation', []):
                 if msg.get('role') == 'assistant' and 'content' in msg:
-                    if re.search(r'\b(postcode|tuning|booking|slot|appointment)\b', msg['content'], re.IGNORECASE):
-                        has_tuning_context = True
-                        break
+                    # Check if content is a string before searching
+                    content = msg['content']
+                    if isinstance(content, str):
+                        if re.search(r'\b(postcode|tuning|booking|slot|appointment)\b', content, re.IGNORECASE):
+                            has_tuning_context = True
+                            break
+                    # If content is a list, check each item
+                    elif isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, str) and re.search(r'\b(postcode|tuning|booking|slot|appointment)\b', item, re.IGNORECASE):
+                                has_tuning_context = True
+                                break
             
             # Also check if it's just a postcode with minimal other text
             is_just_postcode = len(question.strip()) < 12
