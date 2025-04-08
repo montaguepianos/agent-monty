@@ -194,12 +194,67 @@ def handle_more_options_request(user_input: str, context: dict) -> str:
     else:
         return "I'll need your postcode to check available tuning slots. Could you please provide your postcode?"
 
+def handle_time_slot_selection(message: str, context: dict) -> str:
+    """Handle when a user selects a time slot and transition to collecting customer details."""
+    # Extract the selected date and time
+    date_match = re.search(r'(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?', message, re.IGNORECASE)
+    time_match = re.search(r'\b(?:1[0-2]|0?[1-9]):?(?:[0-5][0-9])?\s*(?:am|pm)?\b', message, re.IGNORECASE)
+    
+    if date_match and time_match:
+        # Store the selected slot in context
+        context['selected_date'] = date_match.group()
+        context['selected_time'] = time_match.group()
+        context['booking_stage'] = 'collecting_name'
+        
+        return "Great! To book this slot, I'll need a few details. What's your full name?"
+    
+    return None
+
 def process_message(message: str, context: dict = None) -> str:
     """Process incoming messages and return appropriate responses."""
     if context is None:
         context = {}
     
     message = message.lower().strip()
+    
+    # Check if we're in the booking flow
+    if 'booking_stage' in context:
+        if context['booking_stage'] == 'collecting_name':
+            # Store the name and move to collecting address
+            context['customer_name'] = message
+            context['booking_stage'] = 'collecting_address'
+            return "Thank you! Could you please provide your complete address, including postcode?"
+            
+        elif context['booking_stage'] == 'collecting_address':
+            # Store the address and move to collecting phone
+            context['address'] = message
+            context['booking_stage'] = 'collecting_phone'
+            return "Thank you! Finally, could you please provide your phone number?"
+            
+        elif context['booking_stage'] == 'collecting_phone':
+            # We have all details, attempt to make the booking
+            try:
+                result = book_piano_tuning(
+                    date=context['selected_date'],
+                    time=context['selected_time'],
+                    customer_name=context['customer_name'],
+                    address=context['address'],
+                    phone=message
+                )
+                # Clear the booking context
+                context.pop('booking_stage', None)
+                context.pop('selected_date', None)
+                context.pop('selected_time', None)
+                context.pop('customer_name', None)
+                context.pop('address', None)
+                return result
+            except Exception as e:
+                return f"I encountered an error while trying to book your appointment: {str(e)}. Please call Lee on 01442 876131 for assistance."
+    
+    # Check for time slot selection
+    time_slot_response = handle_time_slot_selection(message, context)
+    if time_slot_response:
+        return time_slot_response
     
     # Store postcode in context if found
     postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', message, re.IGNORECASE)
