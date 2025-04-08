@@ -1027,32 +1027,43 @@ def ask():
                     {"role": "assistant", "content": response_text}
                 ])
                 
-                # Generate audio for the response
-                try:
-                    voice_settings = MONTY_VOICE_SETTINGS
-                    print(f"Generating audio with OpenAI for direct postcode response")
-                    speech_response = client.audio.speech.create(
-                        model=voice_settings.model,
-                        voice=voice_settings.voice,
-                        input=response_text,
-                        instructions=voice_settings.instructions
-                    )
-                    audio_bytes = speech_response.content
-                    audio_data = audio_bytes.hex()
-                    print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
-                    
-                    return jsonify({
-                        'response': response_text,
-                        'agent': 'Monty Agent',
-                        'audio': audio_data
-                    })
-                except Exception as audio_err:
-                    print(f"Error generating audio: {audio_err}")
-                    return jsonify({
-                        'response': response_text,
-                        'agent': 'Monty Agent',
-                        'audio': None
-                    })
+                # First return the response with the slots
+                response = jsonify({
+                    'response': response_text,
+                    'agent': 'Monty Agent',
+                    'audio': None
+                })
+                
+                # Then try to generate audio in a background thread
+                def generate_audio():
+                    try:
+                        voice_settings = MONTY_VOICE_SETTINGS
+                        print(f"Generating audio with OpenAI for direct postcode response")
+                        speech_response = client.audio.speech.create(
+                            model=voice_settings.model,
+                            voice=voice_settings.voice,
+                            input=response_text,
+                            instructions=voice_settings.instructions
+                        )
+                        audio_bytes = speech_response.content
+                        audio_data = audio_bytes.hex()
+                        print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
+                        
+                        # Update the response with audio data
+                        response_data = response.get_json()
+                        response_data['audio'] = audio_data
+                        response.set_data(json.dumps(response_data))
+                    except Exception as audio_err:
+                        print(f"Error generating audio: {audio_err}")
+                        # Don't update the response if audio generation fails
+                
+                # Start audio generation in background
+                import threading
+                audio_thread = threading.Thread(target=generate_audio)
+                audio_thread.daemon = True
+                audio_thread.start()
+                
+                return response
         
         # For non-postcode or agent-based handling, continue with standard approach
         # Get the last agent and conversation history
