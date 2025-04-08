@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "tore the address before clearing the context"
+git commit -m "THIS ONE WORKS (audio missing)"
 git push
 ```
 
