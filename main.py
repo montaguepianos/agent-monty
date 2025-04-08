@@ -212,6 +212,8 @@ def process_message(message: str, context: dict = None) -> str:
                 # Store the original date and time for the success message
                 original_date = context['selected_date']
                 original_time = context['selected_time']
+                customer_name = context['customer_name']
+                customer_address = context['address']
                 
                 # Format the date and time for booking
                 formatted_date = format_date_for_booking(original_date)
@@ -230,8 +232,8 @@ def process_message(message: str, context: dict = None) -> str:
                 print(f"Original time: {original_time}")
                 print(f"Formatted time: {formatted_time}")
                 print(f"Date: {formatted_date}")
-                print(f"Customer: {context['customer_name']}")
-                print(f"Address: {context['address']}")
+                print(f"Customer: {customer_name}")
+                print(f"Address: {customer_address}")
                 print(f"Phone: {message}")
                 
                 # Make the booking request
@@ -240,8 +242,8 @@ def process_message(message: str, context: dict = None) -> str:
                     json={
                         'date': formatted_date,
                         'time': formatted_time,
-                        'customer_name': context['customer_name'],
-                        'address': context['address'],
+                        'customer_name': customer_name,
+                        'address': customer_address,
                         'phone': message
                     },
                     headers={'Content-Type': 'application/json'},
@@ -265,7 +267,7 @@ def process_message(message: str, context: dict = None) -> str:
                     date_obj = datetime.strptime(formatted_date, '%Y-%m-%d')
                     formatted_date_display = date_obj.strftime('%A, %B %d')
                     # Use the original time in the success message
-                    return f"Great! Your piano tuning appointment is all set for {formatted_date_display} at {original_time} with our piano tuner. He'll be visiting you at {context['address']}."
+                    return f"Great! Your piano tuning appointment is all set for {formatted_date_display} at {original_time} with our piano tuner. He'll be visiting you at {customer_address}."
                 else:
                     error_message = response.json().get('error', f"Booking failed with status {response.status_code}")
                     return f"I encountered an error while trying to book your appointment: {error_message}. Please call Lee on 01442 876131 for assistance."
