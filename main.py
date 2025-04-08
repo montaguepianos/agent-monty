@@ -209,21 +209,40 @@ def process_message(message: str, context: dict = None) -> str:
         elif context['booking_stage'] == 'collecting_phone':
             # We have all details, attempt to make the booking
             try:
-                result = book_piano_tuning(
-                    date=context['selected_date'],
-                    time=context['selected_time'],
-                    customer_name=context['customer_name'],
-                    address=context['address'],
-                    phone=message
+                # Format the date and time for booking
+                formatted_date = format_date_for_booking(context['selected_date'])
+                formatted_time = format_time_for_booking(context['selected_time'])
+                
+                # Make the booking request
+                response = requests.post(
+                    'https://monty-mcp.onrender.com/create-booking',
+                    json={
+                        'date': formatted_date,
+                        'time': formatted_time,
+                        'customer_name': context['customer_name'],
+                        'address': context['address'],
+                        'phone': message
+                    },
+                    headers={'Content-Type': 'application/json'},
+                    timeout=30
                 )
+                
                 # Clear the booking context
                 context.pop('booking_stage', None)
                 context.pop('selected_date', None)
                 context.pop('selected_time', None)
                 context.pop('customer_name', None)
                 context.pop('address', None)
-                return result
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get('message', f"Your piano tuning appointment is all set for {context['selected_date']} at {context['selected_time']}.")
+                else:
+                    error_message = response.json().get('error', f"Booking failed with status {response.status_code}")
+                    return f"I encountered an error while trying to book your appointment: {error_message}. Please call Lee on 01442 876131 for assistance."
+                    
             except Exception as e:
+                print(f"Error in booking process: {e}")
                 return f"I encountered an error while trying to book your appointment: {str(e)}. Please call Lee on 01442 876131 for assistance."
     
     # Check for time slot selection

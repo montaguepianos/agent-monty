@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "properly handle time slot selection and transition to the booking flow"
+git commit -m "modify the process_message function to properly handle the booking tool."
 git push
 ```
 
