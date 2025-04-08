@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "worker time out logging"
+git commit -m "properly handle time slot selection and transition to the booking flow"
 git push
 ```
 

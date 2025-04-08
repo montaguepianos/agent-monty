@@ -830,6 +830,117 @@ def ask():
                 'conversation': []
             }
         
+        # Check if we're in the booking flow
+        if 'booking_stage' in conversation_history[session_id]:
+            print(f"Continuing booking flow at stage: {conversation_history[session_id]['booking_stage']}")
+            response_text = process_message(question, conversation_history[session_id])
+            
+            # Update conversation history
+            conversation_history[session_id]['conversation'].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": response_text}
+            ])
+            
+            # Return the response immediately without waiting for audio
+            response = jsonify({
+                'response': response_text,
+                'agent': 'Monty Agent',
+                'audio': None
+            })
+            
+            # Start audio generation in a separate thread
+            def generate_audio():
+                try:
+                    # Use Monty's voice settings
+                    voice_settings = MONTY_VOICE_SETTINGS
+                    
+                    if voice_settings.provider == "openai":
+                        print(f"Generating audio with OpenAI for booking response")
+                        speech_response = client.audio.speech.create(
+                            model=voice_settings.model,
+                            voice=voice_settings.voice,
+                            input=response_text,
+                            instructions=voice_settings.instructions
+                        )
+                        audio_bytes = speech_response.content
+                        audio_data = audio_bytes.hex()
+                        print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
+                        
+                        # Update the response with audio data
+                        response_data = response.get_json()
+                        response_data['audio'] = audio_data
+                        response.set_data(json.dumps(response_data))
+                except Exception as audio_err:
+                    print(f"Error generating audio: {audio_err}")
+            
+            # Start audio generation in background
+            import threading
+            audio_thread = threading.Thread(target=generate_audio)
+            audio_thread.daemon = True
+            audio_thread.start()
+            
+            return response
+        
+        # Check for time slot selection
+        date_match = re.search(r'(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?', question, re.IGNORECASE)
+        time_match = re.search(r'\b(?:1[0-2]|0?[1-9]):?(?:[0-5][0-9])?\s*(?:am|pm)?\b', question, re.IGNORECASE)
+        
+        if date_match and time_match:
+            print(f"Detected time slot selection: {date_match.group()} at {time_match.group()}")
+            
+            # Store the selected slot in context
+            conversation_history[session_id]['selected_date'] = date_match.group()
+            conversation_history[session_id]['selected_time'] = time_match.group()
+            conversation_history[session_id]['booking_stage'] = 'collecting_name'
+            
+            response_text = "Great! To book this slot, I'll need a few details. What's your full name?"
+            
+            # Update conversation history
+            conversation_history[session_id]['conversation'].extend([
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": response_text}
+            ])
+            
+            # Return the response immediately without waiting for audio
+            response = jsonify({
+                'response': response_text,
+                'agent': 'Monty Agent',
+                'audio': None
+            })
+            
+            # Start audio generation in a separate thread
+            def generate_audio():
+                try:
+                    # Use Monty's voice settings
+                    voice_settings = MONTY_VOICE_SETTINGS
+                    
+                    if voice_settings.provider == "openai":
+                        print(f"Generating audio with OpenAI for booking response")
+                        speech_response = client.audio.speech.create(
+                            model=voice_settings.model,
+                            voice=voice_settings.voice,
+                            input=response_text,
+                            instructions=voice_settings.instructions
+                        )
+                        audio_bytes = speech_response.content
+                        audio_data = audio_bytes.hex()
+                        print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
+                        
+                        # Update the response with audio data
+                        response_data = response.get_json()
+                        response_data['audio'] = audio_data
+                        response.set_data(json.dumps(response_data))
+                except Exception as audio_err:
+                    print(f"Error generating audio: {audio_err}")
+            
+            # Start audio generation in background
+            import threading
+            audio_thread = threading.Thread(target=generate_audio)
+            audio_thread.daemon = True
+            audio_thread.start()
+            
+            return response
+        
         # Extract postcode if present for direct handling
         postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
         if postcode_match:
