@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "Error fix, The response is returned before audio generation starts"
+git commit -m "Reinstate Mindy Voice"
 git push
 ```
 
