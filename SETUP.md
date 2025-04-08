@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "Time zone fix -1hour before booking"
+git commit -m "time handling logic "
 git push
 ```
 

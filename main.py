@@ -217,10 +217,14 @@ def process_message(message: str, context: dict = None) -> str:
                 formatted_date = format_date_for_booking(original_date)
                 formatted_time = format_time_for_booking(original_time)
                 
-                # Adjust time for timezone (subtract 1 hour)
-                hour, minute = map(int, formatted_time.split(':'))
-                adjusted_hour = (hour - 1) % 24
-                formatted_time = f"{adjusted_hour:02d}:{minute:02d}"
+                # Only adjust time if it was originally in 12-hour format (contains am/pm)
+                if 'am' in original_time.lower() or 'pm' in original_time.lower():
+                    hour, minute = map(int, formatted_time.split(':'))
+                    adjusted_hour = (hour - 1) % 24
+                    formatted_time = f"{adjusted_hour:02d}:{minute:02d}"
+                    print(f"Adjusted time from 12-hour format: {formatted_time}")
+                else:
+                    print(f"Using original 24-hour format: {formatted_time}")
                 
                 print(f"Attempting to book appointment:")
                 print(f"Original time: {original_time}")
