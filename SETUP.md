@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "prevent the worker timeout issues"
+git commit -m "worker time out logging"
 git push
 ```
 
