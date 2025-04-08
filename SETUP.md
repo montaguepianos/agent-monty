@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "prevent the SystemExit error "
+git commit -m "prevent the worker timeout issues"
 git push
 ```
 

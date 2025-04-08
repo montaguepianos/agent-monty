@@ -867,7 +867,13 @@ def ask():
                 # Get the response directly from our function
                 response_text = check_piano_tuning_availability_direct(postcode)
                 
-                # Generate audio for the response (if needed)
+                # Update conversation history with this exchange
+                conversation_history[session_id]['conversation'].extend([
+                    {"role": "user", "content": question},
+                    {"role": "assistant", "content": response_text}
+                ])
+                
+                # Try to generate audio, but don't let it block the response
                 audio_data = None
                 try:
                     # Use Monty's voice settings
@@ -886,13 +892,8 @@ def ask():
                         print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
                 except Exception as audio_err:
                     print(f"Error generating audio: {audio_err}")
+                    # Continue without audio
                     audio_data = None
-                
-                # Update conversation history with this exchange
-                conversation_history[session_id]['conversation'].extend([
-                    {"role": "user", "content": question},
-                    {"role": "assistant", "content": response_text}
-                ])
                 
                 return jsonify({
                     'response': response_text,
@@ -939,7 +940,7 @@ def ask():
         ]
         conversation_history[session_id]['last_agent'] = result._last_agent
         
-        # Generate audio for the response
+        # Try to generate audio, but don't let it block the response
         audio_data = None
         try:
             # Get the appropriate voice settings for the agent
@@ -972,6 +973,7 @@ def ask():
                 print(f"Successfully generated audio with ElevenLabs: {len(audio_data) // 2} bytes")
         except Exception as audio_err:
             print(f"Error generating audio: {audio_err}")
+            # Continue without audio
             audio_data = None
             
         # Send response with audio if available
