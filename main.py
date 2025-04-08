@@ -209,9 +209,20 @@ def process_message(message: str, context: dict = None) -> str:
         elif context['booking_stage'] == 'collecting_phone':
             # We have all details, attempt to make the booking
             try:
+                # Store the original date and time for the success message
+                original_date = context['selected_date']
+                original_time = context['selected_time']
+                
                 # Format the date and time for booking
-                formatted_date = format_date_for_booking(context['selected_date'])
-                formatted_time = format_time_for_booking(context['selected_time'])
+                formatted_date = format_date_for_booking(original_date)
+                formatted_time = format_time_for_booking(original_time)
+                
+                print(f"Attempting to book appointment:")
+                print(f"Date: {formatted_date}")
+                print(f"Time: {formatted_time}")
+                print(f"Customer: {context['customer_name']}")
+                print(f"Address: {context['address']}")
+                print(f"Phone: {message}")
                 
                 # Make the booking request
                 response = requests.post(
@@ -227,6 +238,10 @@ def process_message(message: str, context: dict = None) -> str:
                     timeout=30
                 )
                 
+                print(f"Booking response status: {response.status_code}")
+                if response.status_code != 200:
+                    print(f"Booking error response: {response.text}")
+                
                 # Clear the booking context
                 context.pop('booking_stage', None)
                 context.pop('selected_date', None)
@@ -236,13 +251,16 @@ def process_message(message: str, context: dict = None) -> str:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get('message', f"Your piano tuning appointment is all set for {context['selected_date']} at {context['selected_time']}.")
+                    return data.get('message', f"Your piano tuning appointment is all set for {original_date} at {original_time}.")
                 else:
                     error_message = response.json().get('error', f"Booking failed with status {response.status_code}")
                     return f"I encountered an error while trying to book your appointment: {error_message}. Please call Lee on 01442 876131 for assistance."
                     
             except Exception as e:
                 print(f"Error in booking process: {e}")
+                print(f"Error type: {type(e).__name__}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 return f"I encountered an error while trying to book your appointment: {str(e)}. Please call Lee on 01442 876131 for assistance."
     
     # Check for time slot selection

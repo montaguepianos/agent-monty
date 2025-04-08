@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "modify the process_message function to properly handle the booking tool."
+git commit -m "toring the formatted date and time before clearing the context"
 git push
 ```
 
