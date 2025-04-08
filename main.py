@@ -486,6 +486,8 @@ def format_date_for_booking(date: str) -> str:
 
 def format_time_for_booking(time: str) -> str:
     """Format a time string into HH:MM format for booking."""
+    print(f"\nFormatting time for booking: {time}")
+    
     # Remove any extraneous spaces or characters
     time = time.strip().lower()
     
@@ -497,6 +499,7 @@ def format_time_for_booking(time: str) -> str:
         match = re.match(r'^(\d{1,2}):(\d{2})$', time)
         hour = int(match.group(1))
         minute = int(match.group(2))
+        print(f"24-hour format detected: {hour:02d}:{minute:02d}")
         return f"{hour:02d}:{minute:02d}"
     
     # Format: 12-hour time with am/pm (9:30am, 9:30 am, 9:30pm, 9:30 pm)
@@ -511,6 +514,7 @@ def format_time_for_booking(time: str) -> str:
         elif ampm == 'am' and hour == 12:
             hour = 0
         
+        print(f"12-hour format with am/pm detected: {hour:02d}:{minute:02d}")
         return f"{hour:02d}:{minute:02d}"
     
     # Format: Hour only with am/pm (9am, 9pm)
@@ -524,11 +528,13 @@ def format_time_for_booking(time: str) -> str:
         elif ampm == 'am' and hour == 12:
             hour = 0
         
+        print(f"Hour only with am/pm detected: {hour:02d}:00")
         return f"{hour:02d}:00"
     
     # Format: Hour only (9, 13)
     elif re.match(r'^(\d{1,2})$', time):
         hour = int(time)
+        print(f"Hour only detected: {hour:02d}:00")
         return f"{hour:02d}:00"
     
     # Format: o'clock variants
@@ -541,21 +547,27 @@ def format_time_for_booking(time: str) -> str:
                 hour += 12
             elif "am" in time and hour == 12:
                 hour = 0
+            print(f"O'clock format detected: {hour:02d}:00")
             return f"{hour:02d}:00"
         
     # Natural language time
     elif any(word in time for word in ["morning", "afternoon", "evening"]):
         if "morning" in time:
             if "early" in time:
+                print("Early morning detected: 09:00")
                 return "09:00"
             else:
+                print("Morning detected: 10:00")
                 return "10:00"
         elif "afternoon" in time:
             if "early" in time:
+                print("Early afternoon detected: 13:00")
                 return "13:00"
             else:
+                print("Afternoon detected: 14:00")
                 return "14:00"
         elif "evening" in time:
+            print("Evening detected: 17:00")
             return "17:00"
     
     # If all else fails, try a more general regex to extract hours and minutes
@@ -571,8 +583,10 @@ def format_time_for_booking(time: str) -> str:
             elif ampm == 'am' and hour == 12:
                 hour = 0
             
+            print(f"General format detected: {hour:02d}:{minute:02d}")
             return f"{hour:02d}:{minute:02d}"
     
+    print(f"Could not format time: {time}")
     raise ValueError("Could not format time for booking")
 
 class VoiceSettings:

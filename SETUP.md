@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "toring the formatted date and time before clearing the context"
+git commit -m "booking was made one hour later than offered and selected"
 git push
 ```
 
