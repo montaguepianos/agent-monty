@@ -217,9 +217,15 @@ def process_message(message: str, context: dict = None) -> str:
                 formatted_date = format_date_for_booking(original_date)
                 formatted_time = format_time_for_booking(original_time)
                 
+                # Adjust time for timezone (subtract 1 hour)
+                hour, minute = map(int, formatted_time.split(':'))
+                adjusted_hour = (hour - 1) % 24
+                formatted_time = f"{adjusted_hour:02d}:{minute:02d}"
+                
                 print(f"Attempting to book appointment:")
+                print(f"Original time: {original_time}")
+                print(f"Formatted time: {formatted_time}")
                 print(f"Date: {formatted_date}")
-                print(f"Time: {formatted_time}")
                 print(f"Customer: {context['customer_name']}")
                 print(f"Address: {context['address']}")
                 print(f"Phone: {message}")
