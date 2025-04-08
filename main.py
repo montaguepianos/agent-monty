@@ -908,79 +908,42 @@ def ask():
                 {"role": "assistant", "content": response_text}
             ])
             
-            # Generate audio for the response
-            try:
-                voice_settings = MONTY_VOICE_SETTINGS
-                print(f"Generating audio with OpenAI for booking response")
-                speech_response = client.audio.speech.create(
-                    model=voice_settings.model,
-                    voice=voice_settings.voice,
-                    input=response_text,
-                    instructions=voice_settings.instructions
-                )
-                audio_bytes = speech_response.content
-                audio_data = audio_bytes.hex()
-                print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
-                
-                return jsonify({
-                    'response': response_text,
-                    'agent': 'Monty Agent',
-                    'audio': audio_data
-                })
-            except Exception as audio_err:
-                print(f"Error generating audio: {audio_err}")
-                return jsonify({
-                    'response': response_text,
-                    'agent': 'Monty Agent',
-                    'audio': None
-                })
-        
-        # Check for time slot selection
-        date_match = re.search(r'(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?', question, re.IGNORECASE)
-        time_match = re.search(r'\b(?:1[0-2]|0?[1-9]):?(?:[0-5][0-9])?\s*(?:am|pm)?\b', question, re.IGNORECASE)
-        
-        if date_match and time_match:
-            print(f"Detected time slot selection: {date_match.group()} at {time_match.group()}")
+            # Return response immediately for booking flow
+            response = jsonify({
+                'response': response_text,
+                'agent': 'Monty Agent',
+                'audio': None
+            })
             
-            # Store the selected slot in context
-            conversation_history[session_id]['selected_date'] = date_match.group()
-            conversation_history[session_id]['selected_time'] = time_match.group()
-            conversation_history[session_id]['booking_stage'] = 'collecting_name'
+            # Generate audio in background for booking responses
+            def generate_audio():
+                try:
+                    voice_settings = MONTY_VOICE_SETTINGS
+                    print(f"Generating audio with OpenAI for booking response")
+                    speech_response = client.audio.speech.create(
+                        model=voice_settings.model,
+                        voice=voice_settings.voice,
+                        input=response_text,
+                        instructions=voice_settings.instructions
+                    )
+                    audio_bytes = speech_response.content
+                    audio_data = audio_bytes.hex()
+                    print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
+                    
+                    # Update the response with audio data
+                    response_data = response.get_json()
+                    response_data['audio'] = audio_data
+                    response.set_data(json.dumps(response_data))
+                except Exception as audio_err:
+                    print(f"Error generating audio: {audio_err}")
             
-            response_text = "Great! To book this slot, I'll need a few details. What's your full name?"
+            # Start audio generation in background
+            import threading
+            audio_thread = threading.Thread(target=generate_audio)
+            audio_thread.daemon = True
+            audio_thread.start()
             
-            # Update conversation history
-            conversation_history[session_id]['conversation'].extend([
-                {"role": "user", "content": question},
-                {"role": "assistant", "content": response_text}
-            ])
-            
-            # Generate audio for the response
-            try:
-                voice_settings = MONTY_VOICE_SETTINGS
-                print(f"Generating audio with OpenAI for booking response")
-                speech_response = client.audio.speech.create(
-                    model=voice_settings.model,
-                    voice=voice_settings.voice,
-                    input=response_text,
-                    instructions=voice_settings.instructions
-                )
-                audio_bytes = speech_response.content
-                audio_data = audio_bytes.hex()
-                print(f"Successfully generated audio: {len(audio_data) // 2} bytes")
-                
-                return jsonify({
-                    'response': response_text,
-                    'agent': 'Monty Agent',
-                    'audio': audio_data
-                })
-            except Exception as audio_err:
-                print(f"Error generating audio: {audio_err}")
-                return jsonify({
-                    'response': response_text,
-                    'agent': 'Monty Agent',
-                    'audio': None
-                })
+            return response
         
         # Extract postcode if present for direct handling
         postcode_match = re.search(r'[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}', question, re.IGNORECASE)
@@ -1027,14 +990,14 @@ def ask():
                     {"role": "assistant", "content": response_text}
                 ])
                 
-                # First return the response with the slots
+                # Return response immediately for postcode queries
                 response = jsonify({
                     'response': response_text,
                     'agent': 'Monty Agent',
                     'audio': None
                 })
                 
-                # Then try to generate audio in a background thread
+                # Generate audio in background for postcode responses
                 def generate_audio():
                     try:
                         voice_settings = MONTY_VOICE_SETTINGS
@@ -1055,7 +1018,6 @@ def ask():
                         response.set_data(json.dumps(response_data))
                     except Exception as audio_err:
                         print(f"Error generating audio: {audio_err}")
-                        # Don't update the response if audio generation fails
                 
                 # Start audio generation in background
                 import threading
@@ -1104,51 +1066,64 @@ def ask():
         ]
         conversation_history[session_id]['last_agent'] = result._last_agent
         
-        # Generate audio for the response
-        try:
-            # Get the appropriate voice settings for the agent
-            agent_name = result._last_agent.name
-            voice_settings = AGENT_VOICE_SETTINGS.get(agent_name, MONTY_VOICE_SETTINGS)
-            audio_data = None
-            
-            if voice_settings.provider == "openai":
-                # Use OpenAI for audio generation
-                print(f"Generating audio with OpenAI for agent: {agent_name}")
-                speech_response = client.audio.speech.create(
-                    model=voice_settings.model,
-                    voice=voice_settings.voice,
-                    input=response_text,
-                    instructions=voice_settings.instructions
-                )
-                audio_bytes = speech_response.content
-                audio_data = audio_bytes.hex()
-                print(f"Successfully generated audio with OpenAI: {len(audio_data) // 2} bytes")
-            elif voice_settings.provider == "elevenlabs" and elevenlabs_client:
-                # Use ElevenLabs for audio generation
-                print(f"Generating audio with ElevenLabs for agent: {agent_name}")
-                speech_response = elevenlabs_client.text_to_speech.convert(
-                    voice_id=voice_settings.voice_id,
-                    output_format="mp3_44100_128",
-                    text=response_text,
-                    model_id=voice_settings.model
-                )
-                audio_bytes = b''.join(speech_response)
-                audio_data = audio_bytes.hex()
-                print(f"Successfully generated audio with ElevenLabs: {len(audio_data) // 2} bytes")
-            
-            return jsonify({
-                'response': response_text,
-                'agent': result._last_agent.name,
-                'audio': audio_data
-            })
-        except Exception as audio_err:
-            print(f"Error generating audio: {audio_err}")
-            # Return response without audio if generation fails
-            return jsonify({
-                'response': response_text,
-                'agent': result._last_agent.name,
-                'audio': None
-            })
+        # Return response immediately for general conversations
+        response = jsonify({
+            'response': response_text,
+            'agent': result._last_agent.name,
+            'audio': None
+        })
+        
+        # Generate audio in background for general conversations
+        def generate_audio():
+            try:
+                # Get the appropriate voice settings for the agent
+                agent_name = result._last_agent.name
+                voice_settings = AGENT_VOICE_SETTINGS.get(agent_name, MONTY_VOICE_SETTINGS)
+                
+                if voice_settings.provider == "openai":
+                    # Use OpenAI for audio generation
+                    print(f"Generating audio with OpenAI for agent: {agent_name}")
+                    speech_response = client.audio.speech.create(
+                        model=voice_settings.model,
+                        voice=voice_settings.voice,
+                        input=response_text,
+                        instructions=voice_settings.instructions
+                    )
+                    audio_bytes = speech_response.content
+                    audio_data = audio_bytes.hex()
+                    print(f"Successfully generated audio with OpenAI: {len(audio_data) // 2} bytes")
+                    
+                    # Update the response with audio data
+                    response_data = response.get_json()
+                    response_data['audio'] = audio_data
+                    response.set_data(json.dumps(response_data))
+                elif voice_settings.provider == "elevenlabs" and elevenlabs_client:
+                    # Use ElevenLabs for audio generation
+                    print(f"Generating audio with ElevenLabs for agent: {agent_name}")
+                    speech_response = elevenlabs_client.text_to_speech.convert(
+                        voice_id=voice_settings.voice_id,
+                        output_format="mp3_44100_128",
+                        text=response_text,
+                        model_id=voice_settings.model
+                    )
+                    audio_bytes = b''.join(speech_response)
+                    audio_data = audio_bytes.hex()
+                    print(f"Successfully generated audio with ElevenLabs: {len(audio_data) // 2} bytes")
+                    
+                    # Update the response with audio data
+                    response_data = response.get_json()
+                    response_data['audio'] = audio_data
+                    response.set_data(json.dumps(response_data))
+            except Exception as audio_err:
+                print(f"Error generating audio: {audio_err}")
+        
+        # Start audio generation in background
+        import threading
+        audio_thread = threading.Thread(target=generate_audio)
+        audio_thread.daemon = True
+        audio_thread.start()
+        
+        return response
         
     except Exception as e:
         print(f"Error in ask endpoint: {e}")

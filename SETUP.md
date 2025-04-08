@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "Reinstate MONTY AND Mindy Voice"
+git commit -m "fix the booking WITH audio responses"
 git push
 ```
 
