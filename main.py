@@ -78,7 +78,7 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                 # Parse the response
                 data = response.json()
                 slots = data.get('available_slots', [])
-                total_slots = data.get('total_slots', 0)
+                total_slots = len(slots)
                 
                 print(f"Got {total_slots} total slots from MCP server")
                 

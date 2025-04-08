@@ -45,13 +45,9 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "Describe what you changed"
+git commit -m "updated the date and time handling"
 git push
 ```
-
-git add .
-git commit -m "Added 11labs and MCP"
-git push
 
 This automatically triggers a redeploy on Render (usually within ~60 seconds).
 
