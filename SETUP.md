@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "updated the date and time handling"
+git commit -m "prevent the SystemExit error "
 git push
 ```
 

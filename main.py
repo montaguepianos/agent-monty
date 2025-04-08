@@ -45,9 +45,6 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
         print(f"\n==================================================")
         print(f"Checking availability for postcode: {postcode}")
         
-        # First, return an intermediate message for the user (this will be output in the HTML for display)
-        intermediate_message = "Got it, thanks! Please give me a little bit of time to check the calendar. Lee has got me doing a hundred things, like checking your post code is close enough to us, then checking the next 30 days in the diary. The suggested appointments will also need to be close enough to any other booked tunings so that our piano tuner doesn't need a helicopter or time machine to get there in time... give me just a few more moments and I'll be right with you!"
-        
         # Clean up the postcode - remove any special characters that might cause issues
         postcode = re.sub(r'[^A-Za-z0-9\s]', '', postcode).strip()
         print(f"Cleaned postcode: {postcode}")
@@ -67,88 +64,69 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
             
             print(f"Response status code: {response.status_code}")
             
-            # Log full response for debugging
-            try:
-                response_content = response.text[:1000]  # Limit to first 1000 chars in case it's huge
-                print(f"Response content (first 1000 chars): {response_content}")
-            except:
-                print("Could not get response content for logging")
-            
             if response.status_code == 200:
-                # Parse the response
-                data = response.json()
-                slots = data.get('available_slots', [])
-                total_slots = len(slots)
-                
-                print(f"Got {total_slots} total slots from MCP server")
-                
-                if not slots:
-                    return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
-                
-                # Format the slots into a readable message
-                # Only show first 5 slots to keep response manageable
-                slot_list = []
-                for i, slot in enumerate(slots[:5], 1):
-                    # Log each slot for debugging
-                    print(f"Processing slot {i}: {slot}")
+                try:
+                    # Parse the response
+                    data = response.json()
+                    slots = data.get('available_slots', [])
+                    total_slots = len(slots)
                     
-                    # Convert date format to readable format
-                    date_obj = datetime.strptime(slot['date'], '%Y-%m-%d')
-                    formatted_date = date_obj.strftime('%A, %B %d')
+                    print(f"Got {total_slots} total slots from MCP server")
                     
-                    # Ensure time is formatted properly (e.g., "9:00" becomes "09:00")
-                    time_parts = slot['time'].split(':')
-                    if len(time_parts) == 2:
-                        hour, minute = time_parts
-                        hour = int(hour)
-                        formatted_time = f"{hour:02d}:{minute}"
-                    else:
-                        formatted_time = slot['time']
+                    if not slots:
+                        return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
                     
-                    # Format 24-hour time to 12-hour time for display
-                    try:
-                        time_obj = datetime.strptime(formatted_time, '%H:%M')
-                        display_time = time_obj.strftime('%-I:%M %p').lower()
-                        # Remove leading zero from hour if present
-                        if display_time.startswith('0'):
-                            display_time = display_time[1:]
-                    except:
-                        display_time = formatted_time
+                    # Format the slots into a readable message
+                    slot_list = []
+                    for i, slot in enumerate(slots[:5], 1):
+                        try:
+                            # Convert date format to readable format
+                            date_obj = datetime.strptime(slot['date'], '%Y-%m-%d')
+                            formatted_date = date_obj.strftime('%A, %B %d')
+                            
+                            # Format time
+                            time_str = slot['time']
+                            try:
+                                time_obj = datetime.strptime(time_str, '%H:%M')
+                                display_time = time_obj.strftime('%-I:%M %p').lower()
+                                if display_time.startswith('0'):
+                                    display_time = display_time[1:]
+                            except:
+                                display_time = time_str
+                            
+                            slot_list.append(f"{i}. {formatted_date} at {display_time}")
+                        except Exception as slot_err:
+                            print(f"Error formatting slot {i}: {slot_err}")
+                            continue
                     
-                    slot_list.append(f"{i}. {formatted_date} at {display_time}")
-                
-                # Add a note if we're only showing a subset of slots
-                additional_info = ""
-                if total_slots > 5:
-                    additional_info = f"\n\n(Showing 5 of {total_slots} available slots)"
-                
-                message = (
-                    f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
-                    "\n".join(slot_list) +
-                    additional_info +
-                    "\n\nWould any of these times work for you? If not, I can suggest more options."
-                )
-                
-                print("Successfully retrieved and processed slots from MCP server")
-                print("==================================================\n")
-                return message
+                    if not slot_list:
+                        return "I found some available slots but had trouble formatting them. Please call Lee on 01442 876131 to check availability."
+                    
+                    # Add a note if we're only showing a subset of slots
+                    additional_info = ""
+                    if total_slots > 5:
+                        additional_info = f"\n\n(Showing 5 of {total_slots} available slots)"
+                    
+                    message = (
+                        f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
+                        "\n".join(slot_list) +
+                        additional_info +
+                        "\n\nWould any of these times work for you? If not, I can suggest more options."
+                    )
+                    
+                    print("Successfully retrieved and processed slots from MCP server")
+                    print("==================================================\n")
+                    return message
+                    
+                except Exception as parse_err:
+                    print(f"Error parsing response: {parse_err}")
+                    return "I found some available slots but had trouble processing them. Please call Lee on 01442 876131 to check availability."
             
             elif response.status_code == 400:
-                try:
-                    data = response.json()
-                    error_message = data.get('message', "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking.")
-                    print(f"Got 400 error message: {error_message}")
-                    return error_message
-                except Exception as json_err:
-                    print(f"Failed to parse 400 response as JSON: {json_err}")
-                    return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
+                return "I couldn't find any suitable slots. Please call Lee on 01442 876131 to discuss your booking."
             
             else:
-                # Add more detailed error information instead of falling back to hardcoded data
-                error_message = f"The booking system returned an unexpected status code: {response.status_code}. Please call Lee on 01442 876131 to check availability."
-                print(f"Unexpected status code: {response.status_code}")
-                print(f"Returning error message: {error_message}")
-                return error_message
+                return f"The booking system returned an unexpected status code: {response.status_code}. Please call Lee on 01442 876131 to check availability."
             
         except requests.exceptions.ReadTimeout:
             print("Request to MCP server timed out")
@@ -161,15 +139,12 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
         except Exception as e:
             print(f"Error connecting to MCP server: {e}")
             print(f"Error type: {type(e).__name__}")
-            # Return a clear error message instead of hardcoded response
-            return f"I'm experiencing a technical issue connecting to our booking system. Please call Lee on 01442 876131 to check availability. (Error: {type(e).__name__})"
+            return f"I'm experiencing a technical issue connecting to our booking system. Please call Lee on 01442 876131 to check availability."
             
     except Exception as e:
         print(f"Error in check_piano_tuning_availability: {e}")
         print(f"Error type: {type(e).__name__}")
         print("==================================================\n")
-        
-        # Return clear error message
         return "I apologize, but I'm experiencing technical difficulties with our booking system. Please call Lee on 01442 876131 to discuss availability for piano tuning."
 
 @function_tool
