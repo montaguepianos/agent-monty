@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "time handling logic "
+git commit -m "Time display issue in response"
 git push
 ```
 

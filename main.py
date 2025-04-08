@@ -261,7 +261,11 @@ def process_message(message: str, context: dict = None) -> str:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get('message', f"Your piano tuning appointment is all set for {original_date} at {original_time}.")
+                    # Format the date to be more readable
+                    date_obj = datetime.strptime(formatted_date, '%Y-%m-%d')
+                    formatted_date_display = date_obj.strftime('%A, %B %d')
+                    # Use the original time in the success message
+                    return f"Great! Your piano tuning appointment is all set for {formatted_date_display} at {original_time} with our piano tuner. He'll be visiting you at {context['address']}."
                 else:
                     error_message = response.json().get('error', f"Booking failed with status {response.status_code}")
                     return f"I encountered an error while trying to book your appointment: {error_message}. Please call Lee on 01442 876131 for assistance."
