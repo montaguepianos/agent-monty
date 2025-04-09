@@ -45,7 +45,7 @@ pip freeze > requirements.txt
 
 ```bash
 git add .
-git commit -m "Added logic to group slots by date and check for fully booked days"
+git commit -m "rolled back to working version"
 git push
 ```
 

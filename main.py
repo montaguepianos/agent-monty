@@ -76,30 +76,9 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                     if not slots:
                         return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
                     
-                    # Group slots by date to check for fully booked days
-                    slots_by_date = {}
-                    for slot in slots:
-                        date = slot['date']
-                        if date not in slots_by_date:
-                            slots_by_date[date] = []
-                        slots_by_date[date].append(slot['time'])
-                    
-                    # Filter out fully booked days (09:00-17:00)
-                    valid_slots = []
-                    for date, times in slots_by_date.items():
-                        # Check if this day has all slots between 09:00 and 17:00
-                        all_times = set(times)
-                        required_times = {f"{hour:02d}:00" for hour in range(9, 18)}
-                        if not required_times.issubset(all_times):
-                            # Day is not fully booked, include its slots
-                            valid_slots.extend([slot for slot in slots if slot['date'] == date])
-                    
-                    if not valid_slots:
-                        return "I couldn't find any available slots that meet our distance criteria. Please call Lee on 01442 876131 to discuss your booking."
-                    
                     # Format the slots into a readable message
                     slot_list = []
-                    for i, slot in enumerate(valid_slots[:5], 1):
+                    for i, slot in enumerate(slots[:5], 1):
                         try:
                             # Convert date format to readable format
                             date_obj = datetime.strptime(slot['date'], '%Y-%m-%d')
@@ -125,11 +104,11 @@ def check_piano_tuning_availability_direct(postcode: str) -> str:
                     
                     # Add a note if we're only showing a subset of slots
                     additional_info = ""
-                    if len(valid_slots) > 5:
-                        additional_info = f"\n\n(Showing 5 of {len(valid_slots)} available slots)"
+                    if total_slots > 5:
+                        additional_info = f"\n\n(Showing 5 of {total_slots} available slots)"
                     
                     message = (
-                        f"Thank you for your patience! I found {len(valid_slots)} suitable tuning slots:\n\n" +
+                        f"Thank you for your patience! I found {total_slots} suitable tuning slots:\n\n" +
                         "\n".join(slot_list) +
                         additional_info +
                         "\n\nWould any of these times work for you? If not, I can suggest more options."
@@ -382,22 +361,6 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 data = avail_response.json()
                 available_slots = data.get('available_slots', [])
                 
-                # Group slots by date to check for fully booked days
-                slots_by_date = {}
-                for slot in available_slots:
-                    date = slot['date']
-                    if date not in slots_by_date:
-                        slots_by_date[date] = []
-                    slots_by_date[date].append(slot['time'])
-                
-                # Check if the requested date is fully booked
-                if formatted_date in slots_by_date:
-                    all_times = set(slots_by_date[formatted_date])
-                    required_times = {f"{hour:02d}:00" for hour in range(9, 18)}
-                    if required_times.issubset(all_times):
-                        print(f"Date {formatted_date} is fully booked")
-                        return f"I'm sorry, but {date} is fully booked. Please select a different date from the available options."
-                
                 # Check if the requested slot exists in available slots
                 slot_is_available = False
                 for slot in available_slots:
@@ -413,13 +376,12 @@ def book_piano_tuning(date: str, time: str, customer_name: str, address: str, ph
                 
                 print(f"Slot validated as available: {formatted_date} at {booking_time}")
             else:
-                # If we couldn't verify, don't proceed with booking
-                print("Could not verify slot availability, aborting booking attempt")
-                return "I'm sorry, but I couldn't verify the availability of this slot. Please try selecting a different time or call Lee on 01442 876131 for assistance."
+                # If we couldn't verify, continue with the booking anyway
+                print("Could not verify slot availability, proceeding with booking attempt")
         
         except Exception as verify_err:
             print(f"Error validating slot availability: {verify_err}")
-            return "I'm sorry, but I encountered an error while checking slot availability. Please try again or call Lee on 01442 876131 for assistance."
+            # Continue with booking even if verification fails
         
         # Format the date properly if needed
         try:
